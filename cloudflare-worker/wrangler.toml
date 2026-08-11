@@ -1,0 +1,11 @@
+name = "aurexo-backend"
+main = "src/index.js"
+compatibility_date = "2026-08-01"
+
+[vars]
+AUREXO_ALLOWED_ORIGIN = "https://akhilsaless.github.io"
+AUREXO_FRONTEND_URL = "https://akhilsaless.github.io/Aurexo/"
+AUREXO_ZERO_COST_DEFAULT = "true"
+
+[[kv_namespaces]]
+binding = "AUREXO_KV"
