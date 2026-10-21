@@ -311,7 +311,7 @@ export function bindProduction(c) {
             });
             const blob = await response.blob();
             await localMedia(p.id, "image", blob);
-            p.localImage = {
+            find(p.id).localImage = {
               name: "AI illustration · review required",
               size: blob.size,
               type: blob.type,
@@ -518,10 +518,26 @@ export function bindProduction(c) {
                   ? b.jobs
                       .map(
                         (j) =>
-                          `<p><b>${esc(j.platform)}</b> · ${esc(j.state)} · ${new Date(j.runAt).toLocaleString()}${j.url ? ` · <a target="_blank" rel="noopener" href="${esc(j.url)}">View confirmed upload ↗</a>` : ""}${j.error ? `<br>${esc(j.error)}` : ""}</p>`,
+                          `<p><b>${esc(j.platform)}</b> · ${esc(j.state)} · ${new Date(j.runAt).toLocaleString()}${j.url ? ` · <a target="_blank" rel="noopener" href="${esc(j.url)}">View confirmed upload ↗</a>` : ""}${j.error ? `<br>${esc(j.error)}` : ""}${["queued", "waiting", "needs_attention"].includes(j.state) ? `<button data-job-command="cancel" data-job-id="${esc(j.id)}">Cancel job</button>` : ""}${j.state === "needs_attention" && j.platform === "youtube" && (j.resumable || j.externalId) ? `<button data-job-command="resume" data-job-id="${esc(j.id)}">Resume saved session</button>` : ""}</p>`,
                       )
                       .join("")
                   : "<p>No publishing jobs yet.</p>";
+              el?.querySelectorAll("[data-job-command]").forEach(
+                (control) =>
+                  (control.onclick = () =>
+                    c.action(async () => {
+                      await c.api(
+                        "/api/publish/" + control.dataset.jobCommand,
+                        "POST",
+                        { id: control.dataset.jobId },
+                      );
+                      c.notify(
+                        "Job " +
+                          control.dataset.jobCommand +
+                          " request saved. Refresh jobs to see its status.",
+                      );
+                    })),
+              );
             });
           }
           if (a === "analytics") {

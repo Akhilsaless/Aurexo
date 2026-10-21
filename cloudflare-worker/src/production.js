@@ -514,7 +514,14 @@ export async function productionRoute(env, req, reply) {
     });
   }
   if (path === "/api/publish/jobs" && method === "GET")
-    return reply({ jobs: (await get(env, "jobs")) || [] });
+    return reply({
+      jobs: ((await get(env, "jobs")) || []).map(
+        ({ uploadSession, uploadSecret, ...job }) => ({
+          ...job,
+          resumable: Boolean(uploadSession || uploadSecret),
+        }),
+      ),
+    });
   if (path === "/api/publish/jobs" && method === "POST") {
     if (!env.SCHEDULE)
       throw problem(503, "Durable scheduling is not configured");
@@ -586,7 +593,7 @@ export async function productionRoute(env, req, reply) {
         !j ||
         j.state !== "needs_attention" ||
         j.platform !== "youtube" ||
-        (!j.uploadSession && !j.externalId)
+        (!j.uploadSecret && !j.uploadSession && !j.externalId)
       )
         throw problem(
           409,
@@ -769,6 +776,13 @@ export async function productionRoute(env, req, reply) {
   return null;
 }
 async function updateJob(env, id, change) {
+  if (change.uploadSession) {
+    change = {
+      ...change,
+      uploadSecret: await seal(env, { url: change.uploadSession }),
+    };
+    delete change.uploadSession;
+  }
   let result;
   await changeJobs(env, (jobs) => {
     const i = jobs.findIndex((j) => j.id === id);
@@ -914,7 +928,9 @@ async function youtubeStep(env, job, p) {
     });
     return;
   }
-  let session = job.uploadSession;
+  let session = job.uploadSecret
+    ? (await unseal(env, job.uploadSecret)).url
+    : job.uploadSession;
   if (!session) {
     const r = await fetch(
       "https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status",

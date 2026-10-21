@@ -46,7 +46,10 @@ export async function body(req, limit = 100000) {
     offset += part.length;
   }
   try {
-    return JSON.parse(new TextDecoder().decode(data));
+    const parsed = JSON.parse(new TextDecoder().decode(data));
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+      throw new Error("Object required");
+    return parsed;
   } catch {
     throw fail(400, "Invalid JSON");
   }

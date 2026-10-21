@@ -36,7 +36,7 @@ let projects = read("aurexo_projects_v3", []),
   notice = "",
   page = location.hash.slice(1) || "create";
 projects = Array.isArray(projects) ? projects.filter(validProject) : [];
-let serverRevision = 0,
+let serverRevision = read("aurexo_revision_v3", 0),
   afterRenderTask = null;
 const nav = [
   ["create", "Create"],
@@ -100,7 +100,7 @@ function create() {
   return `<section class="intro"><small>YOUR CONTENT STUDIO</small><h1>What shall we create?</h1><p>Start with an idea. AUREXO prepares a script and scene plan for your review.</p></section><form id="create-form" class="panel create-form"><label>Topic or story idea<input name="topic" required maxlength="300" placeholder="For example: Why do rainbows appear?" autofocus></label><div class="two"><label>Content mode<select name="mode" id="mode"><option value="general">General content</option><option value="kids">Kids Content Mode</option></select></label><label id="age-label" hidden>Age group<select name="age"><option>3–5</option><option selected>6–8</option><option>9–12</option></select></label><label>AI provider<select name="provider"><option value="gemini">Gemini${providers.find((x) => x.id === "gemini")?.active ? " · active" : ""}</option><option value="openai">OpenAI${providers.find((x) => x.id === "openai")?.active ? " · active" : ""}</option></select></label></div><label>Source notes and learning goal<textarea name="notes" rows="5" maxlength="12000" placeholder="Paste reliable facts, source links and what your audience should learn. AI output still needs your review."></textarea></label><label class="check"><input name="usage" type="checkbox"> Allow this generation to use my provider account and quota</label><div class="actions"><button type="submit" class="primary" ${busy ? "disabled" : ""}>${busy ? "Preparing your plan…" : "Generate content plan"}</button><button type="button" data-action="save-brief">Save idea without AI</button></div><p class="hint">Scripts and scene plans are text. Video, voice and publishing are separate production steps.</p></form>${discoveryPanel()}<details class="panel"><summary>Your 16-role team</summary><div class="team">${AGENTS.map(([n, d]) => `<div><b>${esc(n)}</b><p>${esc(d)}</p></div>`).join("")}</div><p class="hint">These are workflow responsibilities. Automated research, media production and performance analysis require additional connected services.</p></details>`;
 }
 function projectList() {
-  return `<section class="intro"><h1>Your projects</h1><p>Ideas, scripts and production briefs in one place.</p></section><div class="actions"><a class="button primary" href="#create">Create a project</a><button data-action="backup">Download backup</button><button data-action="migrate">Import earlier AUREXO drafts</button><label class="button">Restore backup<input id="restore" type="file" accept="application/json" hidden></label>${authenticated ? '<button data-action="sync">Load server projects</button>' : ""}</div>${projects.length ? projects.map((p) => card(p, selected === p.id)).join("") : '<section class="panel empty">No projects yet. Start with one idea.</section>'}`;
+  return `<section class="intro"><h1>Your projects</h1><p>Ideas, scripts and production briefs in one place.</p></section><div class="actions"><a class="button primary" href="#create">Create a project</a><button data-action="backup">Download backup</button>${read("aurexo_recovery_v3", null) ? '<button data-action="recovery">Download recovery backup</button>' : ""}<button data-action="migrate">Import earlier AUREXO drafts</button><label class="button">Restore backup<input id="restore" type="file" accept="application/json" hidden></label>${authenticated ? '<button data-action="sync">Load server projects</button>' : ""}</div>${projects.length ? projects.map((p) => card(p, selected === p.id)).join("") : '<section class="panel empty">No projects yet. Start with one idea.</section>'}`;
 }
 function review() {
   const items = projects.filter((p) => p.state === "review");
@@ -170,7 +170,10 @@ function applySnapshot(result) {
     }));
     persist();
   }
-  if (result.revision !== undefined) serverRevision = result.revision;
+  if (result.revision !== undefined) {
+    serverRevision = result.revision;
+    localStorage.setItem("aurexo_revision_v3", JSON.stringify(serverRevision));
+  }
 }
 
 function draft(form) {
@@ -203,6 +206,10 @@ function bind() {
         });
         projects.unshift(b.project);
         serverRevision = b.revision;
+        localStorage.setItem(
+          "aurexo_revision_v3",
+          JSON.stringify(serverRevision),
+        );
         persist();
         page = "review";
         location.hash = "review";
@@ -254,6 +261,8 @@ function bind() {
       await syncProviders();
       const remote = await api("/api/projects");
       serverRevision = remote.revision;
+      if (projects.length)
+        localStorage.setItem("aurexo_recovery_v3", JSON.stringify(projects));
       const saved = remote.projects;
       projects = [
         ...saved,
@@ -332,6 +341,16 @@ function bind() {
         }
         if (a === "export") {
           download("aurexo-brief.json", JSON.stringify(p, null, 2));
+          return;
+        }
+        if (a === "recovery") {
+          download(
+            "aurexo-recovery.json",
+            JSON.stringify({
+              version: 3,
+              projects: read("aurexo_recovery_v3", []),
+            }),
+          );
           return;
         }
         if (a === "backup") {
@@ -447,7 +466,22 @@ async function initializeBackend() {
         if (authenticated) {
           await syncProviders();
           const snapshot = await api("/api/projects");
-          serverRevision = snapshot.revision;
+          if (snapshot.revision !== serverRevision) {
+            if (projects.length)
+              localStorage.setItem(
+                "aurexo_recovery_v3",
+                JSON.stringify(projects),
+              );
+            const onlyLocal = projects.filter(
+              (p) => !snapshot.projects.some((remote) => remote.id === p.id),
+            );
+            applySnapshot({
+              ...snapshot,
+              projects: [...snapshot.projects, ...onlyLocal],
+            });
+            notice =
+              "Server workspace refreshed. Earlier device drafts are available in the recovery backup.";
+          }
         }
         render();
       })
