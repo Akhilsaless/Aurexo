@@ -6,7 +6,14 @@ const dist = resolve("dist");
 await mkdir(dist, { recursive: true });
 await mkdir(resolve(dist, "src"), { recursive: true });
 await mkdir(resolve(dist, "tests"), { recursive: true });
-await copyFile("tests/browser-assembly.html",resolve(dist,"tests/browser-assembly.html"));
+await copyFile(
+  "tests/browser-assembly.html",
+  resolve(dist, "tests/browser-assembly.html"),
+);
+await copyFile(
+  "tests/browser-assembly.js",
+  resolve(dist, "tests/browser-assembly.js"),
+);
 for (const file of [
   "index.html",
   "icon.svg",

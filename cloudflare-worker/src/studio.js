@@ -301,7 +301,11 @@ async function routes(env, req, reply) {
   }
   const researched = await researchRoute(env, req, reply);
   if (researched) return researched;
-  const handled = await productionRoute(env, req, reply);
+  const handled = await productionRoute(
+    { ...env, ACTOR: { role: identity.role, email: identity.email || null } },
+    req,
+    reply,
+  );
   if (handled) return handled;
   if (path === "/api/integrations" && method === "GET") {
     const providers = [];
