@@ -23,6 +23,7 @@ for (const file of [
   "src/domain.js",
   "src/integration-registry.js",
   "src/validation.js",
+  "src/profiles.js",
   "src/quality.js",
   "src/migration.js",
   "src/media.js",

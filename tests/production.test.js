@@ -99,10 +99,12 @@ function fixture() {
     },
     async token() {
       store.set(
-        "social-token:youtube",
+        "social-token:youtube:kids",
         JSON.stringify(
           await seal(env, {
             access_token: "test-access-token",
+            accountId: "kids-channel",
+            accountName: "Kids channel",
             expiresAt: Date.now() + 86400000,
           }),
         ),
@@ -304,4 +306,58 @@ test("interrupted upload resumes its session instead of creating a second video"
   } finally {
     globalThis.fetch = original;
   }
+});
+
+test("YouTube studio slots are separate and a legacy connection cannot publish kids content", async () => {
+  const f = fixture();
+  await f.login();
+  await f.seed();
+  await f.token();
+  await f.upload();
+  await approve(f);
+  const status = await (await f.req("/api/social/status")).json();
+  assert.equal(
+    status.channels.find((c) => c.slot === "kids").account,
+    "Kids channel",
+  );
+  assert.equal(
+    status.channels.find((c) => c.slot === "comedy").connected,
+    false,
+  );
+  const savedToken = f.store.get("social-token:youtube:kids");
+  f.store.set("social-token:youtube", savedToken);
+  f.store.delete("social-token:youtube:kids");
+  assert.equal(
+    (
+      await f.req("/api/publish/jobs", "POST", {
+        projectId: "project-1",
+        platform: "youtube",
+        confirmPublish: true,
+      })
+    ).status,
+    409,
+  );
+  f.store.set("social-token:youtube:kids", savedToken);
+  const r = await f.req("/api/publish/jobs", "POST", {
+    projectId: "project-1",
+    platform: "youtube",
+    confirmPublish: true,
+  });
+  const { job } = await r.json();
+  assert.equal(job.channelSlot, "kids");
+  assert.equal(job.accountId, "kids-channel");
+  f.store.set(
+    "social-token:youtube:kids",
+    JSON.stringify(
+      await seal(f.env, {
+        access_token: "other-token",
+        accountId: "different-channel",
+        expiresAt: Date.now() + 86400000,
+      }),
+    ),
+  );
+  await runDueJobs(f.env);
+  const stopped = JSON.parse(f.store.get("jobs"))[0];
+  assert.equal(stopped.state, "needs_attention");
+  assert.match(stopped.error, /channel changed/);
 });

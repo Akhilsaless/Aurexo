@@ -1,3 +1,4 @@
+import { PROFILES, profileName } from "./profiles.js";
 import { animationPanel, bindAnimation } from "./animation-ui.js";
 import { localMedia, renderVideo, subtitles, drawFrame } from "./media.js";
 import { reviewChecklist, recommendations } from "./quality.js";
@@ -42,10 +43,10 @@ export function mediaPanel(p, backend) {
     )}<button>Approve this exact video</button></form>${p.finalApproval || p.localFinalApproval ? '<p class="notice">Current video has final approval.</p>' : ""}</section>`;
 }
 export function publishControls(p) {
-  return `<details class="panel"><summary>Publish or schedule this video</summary><form class="publish-job" data-id="${esc(p.id)}"><div class="two"><label>Platform<select name="platform"><option value="youtube">YouTube</option><option value="instagram">Instagram Reel</option><option value="facebook">Facebook video</option></select></label><label>YouTube visibility<select name="privacy"><option value="unlisted">Unlisted</option><option value="public">Public</option></select></label></div><label>Schedule in your local time (leave blank for now)<input type="datetime-local" name="runAt"></label><label class="check"><input type="checkbox" name="confirm" required>I authorize uploading this approved video to the selected account at this time.</label><button class="primary">Queue approved video</button><p class="hint">Requires a connected social account, server video and final approval. Instagram/Facebook require MP4. Made-for-kids designation follows Kids Content Mode.</p></form></details>`;
+  return `<details class="panel"><summary>Publish or schedule this video</summary><form class="publish-job" data-id="${esc(p.id)}"><div class="two"><label>Platform<select name="platform"><option value="youtube">YouTube</option><option value="instagram">Instagram Reel</option><option value="facebook">Facebook video</option></select></label><label>YouTube visibility<select name="privacy"><option value="unlisted">Unlisted</option><option value="public">Public</option></select></label></div><label>Schedule in your local time (leave blank for now)<input type="datetime-local" name="runAt"></label><label class="check"><input type="checkbox" name="confirm" required>I authorize uploading this approved video to the selected account at this time.</label><button class="primary">Queue approved video</button><p class="hint">YouTube destination: ${esc(profileName(p.mode))} channel. Requires its matching connection, server video and final approval. Instagram/Facebook require MP4. Made-for-kids designation follows Kids Content Mode.</p></form></details>`;
 }
 export function socialSettings() {
-  return `<details class="panel"><summary>YouTube, Instagram & Facebook connections</summary><div id="social-status">Sign in and refresh connections to see their status.</div><button data-production="connections">Refresh connections</button><button data-production="connect" data-type="youtube">Connect YouTube channel</button><p class="hint">YouTube can use the Google client already configured for sign-in. Only the channel owner connects the account; your manager uses it after approval.</p><details><summary>Advanced social app settings</summary>${["youtube", "meta"].map((type) => `<form class="social-config" data-type="${type}"><h4>${type === "youtube" ? "YouTube / Google OAuth app" : "Meta app · Instagram & Facebook"}</h4><label>Client / app ID<input name="clientId" required autocomplete="off"></label><label>Client / app secret<input name="clientSecret" type="password" required autocomplete="off"></label>${type === "meta" ? '<div class="two"><label>Graph API version<input name="version" required placeholder="Version from your Meta app dashboard"></label><label>Facebook Page ID<input name="pageId" required inputmode="numeric"></label></div>' : ""}<p class="hint">Register your backend’s /api/oauth/${type}/callback as the redirect URI in the provider console. Credentials stay encrypted on the server.</p><button>Save social app</button><button type="button" data-production="connect" data-type="${type}">Connect account</button><button type="button" data-production="disconnect-social" data-type="${type}">Disconnect account</button></form>`).join("")}</details></details>`;
+  return `<details class="panel"><summary>YouTube, Instagram & Facebook connections</summary><div id="social-status">Sign in and refresh connections to see their status.</div><button data-production="connections">Refresh connections</button>${PROFILES.map((p) => `<div class="panel"><h4>${esc(p.name)}</h4><p>${esc(p.brand)}</p><button data-production="connect" data-type="youtube" data-slot="${p.id}">Connect ${esc(p.name)} channel</button><button data-production="disconnect-social" data-type="youtube" data-slot="${p.id}">Disconnect</button></div>`).join("")}<p class="hint">YouTube can use the Google client already configured for sign-in. Connect each studio to its own channel. Existing channel access stays in the legacy connection until you choose a new channel. Only the owner connects channels; approved managers can publish.</p><details><summary>Advanced social app settings</summary>${["youtube", "meta"].map((type) => `<form class="social-config" data-type="${type}"><h4>${type === "youtube" ? "YouTube / Google OAuth app" : "Meta app · Instagram & Facebook"}</h4><label>Client / app ID<input name="clientId" required autocomplete="off"></label><label>Client / app secret<input name="clientSecret" type="password" required autocomplete="off"></label>${type === "meta" ? '<div class="two"><label>Graph API version<input name="version" required placeholder="Version from your Meta app dashboard"></label><label>Facebook Page ID<input name="pageId" required inputmode="numeric"></label></div>' : ""}<p class="hint">Register your backend’s /api/oauth/${type}/callback as the redirect URI in the provider console. Credentials stay encrypted on the server.</p><button>Save social app</button><button type="button" data-production="connect" data-type="${type}">Connect account</button><button type="button" data-production="disconnect-social" data-type="${type}">Disconnect account</button></form>`).join("")}</details></details>`;
 }
 export function growthPanel() {
   return `<details class="panel"><summary>Publishing jobs & growth</summary><div class="actions"><button data-production="jobs">Refresh jobs</button><button data-production="analytics">Sync platform analytics</button></div><div id="job-list"></div><div id="growth-data"></div></details>`;
@@ -477,7 +478,10 @@ export function bindProduction(c) {
             c.afterRender(() => {
               const el = document.querySelector("#social-status");
               if (el)
-                el.innerHTML = Object.entries(b.status)
+                el.innerHTML = [
+                  ...Object.entries(b.status),
+                  ...(b.channels || []).map((v) => [v.name, v]),
+                ]
                   .map(
                     ([type, v]) =>
                       `<p><b>${esc(type)}</b>: ${v.connected ? "Connected to " + esc(v.account) : v.configured ? "App configured · account not connected" : "Not configured"}</p>`,
@@ -488,12 +492,14 @@ export function bindProduction(c) {
           if (a === "connect") {
             const b = await c.api("/api/social/connect", "POST", {
               type: button.dataset.type,
+              slot: button.dataset.slot,
             });
             location.href = b.url;
           }
           if (a === "disconnect-social") {
             await c.api("/api/social/disconnect", "POST", {
               type: button.dataset.type,
+              slot: button.dataset.slot,
             });
             c.notify("Account disconnected.");
           }
@@ -520,7 +526,7 @@ export function bindProduction(c) {
                   ? b.jobs
                       .map(
                         (j) =>
-                          `<p><b>${esc(j.platform)}</b> · ${esc(j.state)} · ${new Date(j.runAt).toLocaleString()}${j.url ? ` · <a target="_blank" rel="noopener" href="${esc(j.url)}">View confirmed upload ↗</a>` : ""}${j.error ? `<br>${esc(j.error)}` : ""}${["queued", "waiting", "needs_attention"].includes(j.state) ? `<button data-job-command="cancel" data-job-id="${esc(j.id)}">Cancel job</button>` : ""}${j.state === "needs_attention" && j.platform === "youtube" && (j.resumable || j.externalId) ? `<button data-job-command="resume" data-job-id="${esc(j.id)}">Resume saved session</button>` : ""}</p>`,
+                          `<p><b>${esc(j.platform)}</b> · ${esc(j.accountName || profileName(j.channelSlot))} · ${esc(j.state)} · ${new Date(j.runAt).toLocaleString()}${j.url ? ` · <a target="_blank" rel="noopener" href="${esc(j.url)}">View confirmed upload ↗</a>` : ""}${j.error ? `<br>${esc(j.error)}` : ""}${["queued", "waiting", "needs_attention"].includes(j.state) ? `<button data-job-command="cancel" data-job-id="${esc(j.id)}">Cancel job</button>` : ""}${j.state === "needs_attention" && j.platform === "youtube" && (j.resumable || j.externalId) ? `<button data-job-command="resume" data-job-id="${esc(j.id)}">Resume saved session</button>` : ""}</p>`,
                       )
                       .join("")
                   : "<p>No publishing jobs yet.</p>";

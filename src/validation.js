@@ -8,7 +8,7 @@ export function validProject(p) {
     typeof p.title !== "string" ||
     p.title.length > 300 ||
     !["draft", "review", "approved"].includes(p.state) ||
-    !["general", "kids"].includes(p.mode) ||
+    !["general", "kids", "comedy", "ai"].includes(p.mode) ||
     !Number.isFinite(Date.parse(p.createdAt))
   )
     return false;

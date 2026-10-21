@@ -1,3 +1,4 @@
+import { PROFILES, profileName } from "../src/profiles.js";
 import { migrateLegacy } from "../src/migration.js";
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -37,6 +38,8 @@ function app(data = {}) {
     setTimeout,
     clearTimeout,
     AGENTS,
+    PROFILES,
+    profileName,
     migrateLegacy,
     researchPanel,
     editor,
@@ -55,14 +58,18 @@ function app(data = {}) {
   vm.runInContext(source, context);
   return { dom, w, doc: w.document, context };
 }
-test("simple navigation has five pages and hides age selector until kids mode", () => {
+test("three studios default to kids and hide age selection for comedy", () => {
   const a = app();
   assert.equal(a.doc.querySelectorAll("nav a").length, 5);
-  assert.equal(a.doc.querySelector("#age-label").hidden, true);
-  const mode = a.doc.querySelector("#mode");
-  mode.value = "kids";
-  mode.dispatchEvent(new a.w.Event("change"));
   assert.equal(a.doc.querySelector("#age-label").hidden, false);
+  assert.deepEqual(
+    [...a.doc.querySelector("#mode").options].map((o) => o.value),
+    ["kids", "comedy", "ai"],
+  );
+  const mode = a.doc.querySelector("#mode");
+  mode.value = "comedy";
+  mode.dispatchEvent(new a.w.Event("change"));
+  assert.equal(a.doc.querySelector("#age-label").hidden, true);
 });
 test("manual idea saves persistently without API credentials", async () => {
   const a = app();

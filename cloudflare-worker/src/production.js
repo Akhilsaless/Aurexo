@@ -1,3 +1,4 @@
+import { PROFILES, channelSlot } from "../../src/profiles.js";
 import {
   snapshot,
   mutate,
@@ -52,10 +53,19 @@ async function config(env, type) {
     throw problem(409, "Configure this social app in Integrations first.");
   return unseal(env, v);
 }
-async function token(env, type) {
-  const record = await get(env, "social-token:" + type);
+async function token(env, type, slot = "general", accountId) {
+  const key =
+    "social-token:" +
+    type +
+    (type === "youtube" && slot !== "general" ? ":" + channelSlot(slot) : "");
+  const record = await get(env, key);
   if (!record) throw problem(409, "Connect the social account first.");
   let t = await unseal(env, record);
+  if (accountId && t.accountId !== accountId)
+    throw problem(
+      409,
+      "The connected channel changed. Review and queue this video again.",
+    );
   if (type === "youtube" && t.expiresAt < Date.now() + 60000) {
     if (!t.refresh_token)
       throw problem(409, "Reconnect YouTube to refresh access.");
@@ -74,7 +84,7 @@ async function token(env, type) {
       ...refreshed,
       expiresAt: Date.now() + refreshed.expires_in * 1000,
     };
-    await put(env, "social-token:" + type, await seal(env, t));
+    await put(env, key, await seal(env, t));
   }
   return t;
 }
@@ -163,7 +173,15 @@ export async function oauthCallback(env, req, reply) {
       expiresAt: Date.now() + (long.expires_in || 3600) * 1000,
     };
   }
-  await put(env, "social-token:" + type, await seal(env, t));
+  await put(
+    env,
+    "social-token:" +
+      type +
+      (type === "youtube" && ctx.slot && ctx.slot !== "general"
+        ? ":" + channelSlot(ctx.slot)
+        : ""),
+    await seal(env, t),
+  );
   return Response.redirect(new URL("/#integrations", req.url).toString(), 303);
 }
 async function sign(env, key, expires) {
@@ -275,6 +293,18 @@ export async function productionRoute(env, req, reply) {
       };
     }
     return reply({
+      channels: await Promise.all(
+        PROFILES.map(async (profile) => {
+          const saved = await get(env, "social-token:youtube:" + profile.id);
+          const t = saved ? await unseal(env, saved) : null;
+          return {
+            slot: profile.id,
+            name: profile.name,
+            connected: Boolean(t),
+            account: t?.accountName || "",
+          };
+        }),
+      ),
       status,
       mediaStorage: Boolean(env.MEDIA),
       durableScheduling: Boolean(env.SCHEDULE),
@@ -330,6 +360,7 @@ export async function productionRoute(env, req, reply) {
       "oauth:" + state,
       JSON.stringify({
         type: b.type,
+        slot: channelSlot(b.slot),
         redirect,
         verifier,
         expires: Date.now() + 600000,
@@ -366,7 +397,13 @@ export async function productionRoute(env, req, reply) {
     const b = await body(req, 2000);
     if (!["youtube", "meta"].includes(b.type))
       throw problem(400, "Unknown connection");
-    await env.AUREXO_KV.delete("social-token:" + b.type);
+    await env.AUREXO_KV.delete(
+      "social-token:" +
+        b.type +
+        (b.type === "youtube" && b.slot && b.slot !== "general"
+          ? ":" + channelSlot(b.slot)
+          : ""),
+    );
     return reply({ ok: true });
   }
   if (path.startsWith("/api/media/") && ["GET", "HEAD"].includes(method))
@@ -554,7 +591,11 @@ export async function productionRoute(env, req, reply) {
         400,
         "Instagram/Facebook need an MP4 file. Upload an MP4 export first.",
       );
-    const t = await token(env, b.platform === "youtube" ? "youtube" : "meta");
+    const t = await token(
+      env,
+      b.platform === "youtube" ? "youtube" : "meta",
+      channelSlot(p.mode),
+    );
     if (b.platform === "instagram" && !t.instagramId)
       throw problem(
         409,
@@ -582,6 +623,9 @@ export async function productionRoute(env, req, reply) {
       id: crypto.randomUUID(),
       projectId: p.id,
       platform: b.platform,
+      channelSlot: channelSlot(p.mode),
+      accountId: t.accountId,
+      accountName: t.accountName,
       mediaKey: p.media.key,
       mediaHash: p.media.sha256,
       plan: structuredClone(p.plan),
@@ -657,7 +701,12 @@ export async function productionRoute(env, req, reply) {
       try {
         const syncedAt = new Date().toISOString();
         if (j.platform === "youtube") {
-          const t = await token(env, "youtube"),
+          const t = await token(
+              env,
+              "youtube",
+              j.channelSlot || "general",
+              j.accountId,
+            ),
             end = new Date().toISOString().slice(0, 10),
             start = new Date(Date.now() - 28 * 86400000)
               .toISOString()
@@ -871,6 +920,7 @@ export async function runDueJobs(env) {
       const p = await project(env, job.projectId);
       checkApproved(p);
       if (
+        p.mode !== job.mode ||
         p.media.key !== job.mediaKey ||
         p.media.sha256 !== job.mediaHash ||
         JSON.stringify(p.plan) !== JSON.stringify(job.plan)
@@ -912,7 +962,12 @@ async function confirmed(env, job, id, url) {
   }));
 }
 async function youtubeStep(env, job, p) {
-  const t = await token(env, "youtube");
+  const t = await token(
+    env,
+    "youtube",
+    job.channelSlot || "general",
+    job.accountId,
+  );
   if (job.externalId) {
     const status = await apiJson(
       "https://www.googleapis.com/youtube/v3/videos?part=status,processingDetails&id=" +
