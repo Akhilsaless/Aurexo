@@ -1,31 +1,371 @@
-import { AGENTS, PLATFORMS } from './domain.js';
-import { opportunities, insights } from './seed.js';
-import { runCampaignFromOpportunity } from './agents.js';
-import { connectorStatus } from './connectors.js';
-import { approveCampaign, regenerateHook, rejectCampaign, scheduleCampaign, simulatePublish } from './workflow.js';
-import { AI_INTEGRATIONS, VIDEO_INTEGRATIONS, VOICE_INTEGRATIONS, STORAGE_INTEGRATIONS, isPaidIntegration } from './integration-registry.js';
-import { load, save, reset } from './store.js';
-let state=load(); let route=(location.hash||'#mission').slice(1); let busy=false; const root=document.querySelector('#app');
-const esc=s=>String(s??'').replace(/[&<>\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const nav=[['mission','Mission Control'],['discover','Discover'],['studio','Studio'],['review','Approval'],['calendar','Calendar'],['publishing','Publishing'],['growth','Growth'],['settings','Integrations']];
-const badge=s=>`<span class="badge">${esc(String(s).replaceAll('_',' '))}</span>`;
-const backendUrl=()=>String(state.settings.backendUrl||'').replace(/\/$/,'');
-const backendLive=()=>/^https:\/\//.test(backendUrl());
-async function backendGet(path){const r=await fetch(backendUrl()+path);const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d?.error?.message||`Backend ${r.status}`);return d;}
-function shell(content){return `<div class="shell"><aside><div class="brand"><i>A</i><div><b>AUREXO</b><small>AI MEDIA OS</small></div></div><nav>${nav.map(([r,n])=>`<a href="#${r}" class="${route===r?'active':''}">${n}</a>`).join('')}</nav><div class="foot"><span></span> ${state.settings.zeroCostLock?'Zero-Cost Lock ON':'Paid fallback allowed'}<small>${esc(state.settings.niche)}</small></div></aside><main><header><div><small>AUREXO / ${nav.find(x=>x[0]===route)?.[1]||'Mission Control'}</small><h1>${route==='mission'?'Your AI media team is ready.':nav.find(x=>x[0]===route)?.[1]}</h1></div><button class="ghost" data-action="pause">Pause</button></header>${content}</main></div>`}
-function metric(label,value,note){return `<div class="metric"><small>${label}</small><b>${value}</b><span>${note}</span></div>`}
-function campaign(c){return `<article class="campaign"><div><small>${esc(c.category)}</small><h3>${esc(c.title)}</h3></div>${badge(c.state)}<p>${esc(c.strategy?.angle||'Campaign workflow in progress')}</p><div class="row"><span>Quality ${c.quality?.score??'—'}</span><span>${c.render?.provider||'Planning'}</span><span>₹${c.cost?.estimated??0}</span></div></article>`}
-function mission(){const waiting=state.campaigns.filter(c=>c.state==='AWAITING_APPROVAL').length;return shell(`<section class="hero"><div><span class="eyebrow">PERSONAL AI SOCIAL STUDIO</span><h2>Discover. Create.<br><em>Approve. Grow.</em></h2><p>One control room for YouTube, Instagram and Facebook. AUREXO defaults to free-first AI and hybrid production, while premium providers stay optional.</p><button class="primary" data-action="generate">${busy?'Agents working…':'Generate Today’s Campaign'}</button></div><div class="orb">A<small>16 AGENTS</small></div></section><section class="metrics">${metric('CAMPAIGNS',state.campaigns.length,'created locally')}${metric('APPROVALS',waiting,'need your decision')}${metric('MONTH COST',`₹${state.spend.month}`,'estimated')}${metric('BACKEND',backendLive()?'READY':'LOCAL',backendLive()?'secure runtime configured':'demo/manual mode')}</section><div class="grid"><section class="panel"><div class="head"><div><small>PRODUCTION</small><h3>Recent campaigns</h3></div><a href="#studio">Open Studio →</a></div>${state.campaigns.length?state.campaigns.slice(0,3).map(campaign).join(''):'<div class="empty">No campaigns yet. Generate the first one.</div>'}</section><section class="panel"><small>AI TEAM</small><h3>16 coordinated agents</h3><div class="agents">${AGENTS.map(a=>`<span title="${esc(a[1])}">${esc(a[0])}</span>`).join('')}</div><small>LEARNING SIGNALS</small>${insights.map(x=>`<p class="insight">${esc(x)}</p>`).join('')}</section></div>`)}
-function discover(){return shell(`<section class="title"><span class="eyebrow">OPPORTUNITY ENGINE</span><h2>What should AUREXO make next?</h2><p>Seed opportunities prove the workflow today. Live research plugs into the secure backend.</p></section><div class="cards">${opportunities.map(o=>`<article class="opp"><strong>${o.score}</strong><span>${esc(o.category)}</span><h3>${esc(o.title)}</h3><p>${esc(o.why)}</p><div class="row"><span>Fresh ${o.freshness}</span><span>Fit ${o.audienceFit}</span><span>Visual ${o.visual}</span></div><button class="secondary" data-action="generate-one" data-id="${o.id}">Build campaign</button></article>`).join('')}</div>`)}
-function studio(){return shell(`<section class="title"><span class="eyebrow">PRODUCTION PIPELINE</span><h2>Studio</h2><p>Research → verify → strategy → script → scenes → platform variants → quality gate.</p></section>${state.campaigns.length?state.campaigns.map(c=>`<section class="panel studio">${campaign(c)}${c.script?`<div class="script"><small>HOOK</small><blockquote>${esc(c.script.hook)}</blockquote><p>${esc(c.script.body)}</p></div>`:''}${c.scenePlan?`<div class="timeline">${c.scenePlan.map(s=>`<div><b>${s.time}</b><span>${esc(s.type)}</span><p>${esc(s.visual)}</p></div>`).join('')}</div>`:''}${c.variants?`<div class="variants">${Object.entries(c.variants).map(([p,v])=>`<article><small>${p.toUpperCase()}</small><h4>${esc(v.title)}</h4><p>${esc(v.caption)}</p></article>`).join('')}</div>`:''}</section>`).join(''):'<section class="panel empty">Generate a campaign from Mission Control or Discover.</section>'}`)}
-function review(){const q=state.campaigns.filter(c=>c.state==='AWAITING_APPROVAL');return shell(`<section class="title"><span class="eyebrow">HUMAN CONTROL</span><h2>Approval Queue</h2><p>Nothing reaches a real social account without your approval while approval mode is enabled.</p></section>${q.length?q.map(c=>`<section class="panel review">${campaign(c)}<div class="actions"><button class="ghost" data-action="reject" data-id="${c.id}">Reject</button><button class="secondary" data-action="regenerate" data-id="${c.id}">New hook</button><button class="primary" data-action="approve" data-id="${c.id}">Approve</button></div></section>`).join(''):'<section class="panel empty">No campaigns waiting for approval.</section>'}`)}
-function calendar(){const scheduled=state.campaigns.filter(c=>['SCHEDULED','PUBLISHED'].includes(c.state));return shell(`<section class="title"><span class="eyebrow">CONTENT PLAN</span><h2>Calendar</h2></section><section class="panel">${scheduled.length?scheduled.map(c=>`<div class="cal"><b>${new Date(c.scheduledAt||c.publishedAt).toLocaleString()}</b>${campaign(c)}</div>`).join(''):'<div class="empty">Approved campaigns can be scheduled from Publishing.</div>'}</section>`)}
-function publishing(){const cons=connectorStatus(state.settings),live=backendLive(),jobs=state.campaigns.filter(c=>['APPROVED','SCHEDULED','PUBLISHED'].includes(c.state));return shell(`<section class="title"><span class="eyebrow">SOCIAL CONNECTORS</span><h2>Publishing Hub</h2><p>${live?'Secure backend configured. Connect accounts through OAuth and refresh status after returning.':'Backend not configured yet; AUREXO remains in honest demo/manual-publish mode.'}</p>${live?'<button class="secondary" data-action="sync-social">Refresh connection status</button>':''}</section><div class="connectors">${cons.map(c=>`<article><div class="logo">${c.id[0].toUpperCase()}</div><h3>${c.id}</h3>${badge(c.status)}<p>${esc(c.notes)}</p><button class="secondary" data-action="toggle-connect" data-id="${c.id}">${live?(c.status==='connected'?'Connected':'Connect OAuth'):(c.status==='connected'?'Disconnect demo':'Connect demo')}</button></article>`).join('')}</div><section class="panel"><small>PUBLISH JOBS</small>${jobs.length?jobs.map(c=>`<div class="job">${campaign(c)}${c.state==='APPROVED'?`<button class="primary" data-action="schedule" data-id="${c.id}">Schedule</button>`:''}${c.state==='SCHEDULED'?`<button class="primary" data-action="publish" data-id="${c.id}">Run safe publish simulation</button>`:''}</div>`).join(''):'<div class="empty">Approve a campaign first.</div>'}</section>`)}
-function growth(){return shell(`<section class="title"><span class="eyebrow">EVIDENCE LOOP</span><h2>Growth Intelligence</h2><p>Real analytics populate here after social APIs are connected.</p></section><section class="metrics">${PLATFORMS.map(p=>metric(p.toUpperCase(),state.growth[p].followers,'followers/subscribers')).join('')}${metric('LEARNED',state.campaigns.filter(c=>c.state==='LEARNED').length,'campaigns')}</section><section class="panel"><small>CURRENT RECOMMENDATIONS</small>${insights.map(x=>`<p class="insight">${esc(x)}</p>`).join('')}</section>`)}
-function integrationRows(group,list){const flags=state.settings.integrationFlags[group];return list.map(v=>{const blocked=state.settings.zeroCostLock&&isPaidIntegration(v);return `<article class="provider ${blocked?'blocked':''}"><div><h4>${esc(v.name)} <span>${esc(v.tier)}</span></h4><p>${esc(v.note)}</p><small>${v.env.length?'Server slot: '+esc(v.env.join(', ')):'No secret required'}${blocked?' · blocked by Zero-Cost Lock':''}</small></div><label class="switch"><input type="checkbox" data-group="${group}" data-id="${v.id}" ${flags[v.id]?'checked':''} ${blocked?'disabled':''}><i></i></label></article>`}).join('')}
-function settings(){return shell(`<section class="title"><span class="eyebrow">FREE-FIRST ROUTING</span><h2>Integrations & Cost Controls</h2><p>Paid providers are optional and OFF by default. API secrets stay in the secure backend, never this browser.</p></section><div class="settings"><section class="panel"><label>Secure backend URL<input type="url" data-setting="backendUrl" placeholder="https://aurexo-backend.your-subdomain.workers.dev" value="${esc(state.settings.backendUrl||'')}"></label><button class="secondary" data-action="test-backend">Test backend</button><label class="toggle"><input type="checkbox" data-setting="zeroCostLock" ${state.settings.zeroCostLock?'checked':''}><b>Zero-Cost Lock</b><span>Hard-block paid providers even if configured.</span></label><label>Budget mode<select data-setting="budgetMode">${['Economy','Balanced','Premium'].map(x=>`<option ${state.settings.budgetMode===x?'selected':''}>${x}</option>`).join('')}</select></label><label>Monthly budget ₹<input type="number" data-setting="monthlyBudget" value="${state.settings.monthlyBudget}"></label></section><section class="panel"><small>AI BRAIN</small>${integrationRows('ai',AI_INTEGRATIONS)}</section><section class="panel"><small>VIDEO</small>${integrationRows('video',VIDEO_INTEGRATIONS)}</section><section class="panel"><small>VOICE</small>${integrationRows('voice',VOICE_INTEGRATIONS)}</section><section class="panel"><small>STORAGE</small>${integrationRows('storage',STORAGE_INTEGRATIONS)}</section><section class="panel"><button class="ghost danger" data-action="reset">Reset local data</button></section></div>`)}
-function render(){const pages={mission,discover,studio,review,calendar,publishing,growth,settings};root.innerHTML=(pages[route]||mission)();bind()}
-function persist(){save(state);render()}
-async function generate(opp){if(busy)return;busy=true;render();try{const c=await runCampaignFromOpportunity(opp,state.settings,live=>{const i=state.campaigns.findIndex(x=>x.id===live.id);if(i<0)state.campaigns.unshift(live);else state.campaigns[i]=live;save(state);render()});const i=state.campaigns.findIndex(x=>x.id===c.id);state.campaigns[i]=c;state.spend.month+=c.cost?.estimated||0;state.spend.today+=c.cost?.estimated||0;save(state)}finally{busy=false;render()}}
-function bind(){document.querySelectorAll('[data-action]').forEach(el=>el.onclick=async()=>{const a=el.dataset.action,id=el.dataset.id;if(a==='generate')return generate(opportunities[0]);if(a==='generate-one')return generate(opportunities.find(x=>x.id===id));if(a==='test-backend'){try{const d=await backendGet('/api/health');alert(`Backend ready: ${d.service||'AUREXO'} ${d.version||''}`)}catch(e){alert(`Backend test failed: ${e.message}`)}return}if(a==='sync-social'){try{const d=await backendGet('/api/social/status');for(const [p,v] of Object.entries(d.status||{}))state.settings.social[p]=v?'connected':'disconnected';persist()}catch(e){alert(e.message)}return}if(a==='toggle-connect'&&backendLive()&&state.settings.social[id]!=='connected'){const platform=(id==='youtube')?'youtube':'meta';location.href=backendUrl()+`/api/oauth/${platform}/start`;return}const i=state.campaigns.findIndex(x=>x.id===id);if(a==='approve')state.campaigns[i]=approveCampaign(state.campaigns[i]);if(a==='regenerate')state.campaigns[i]=regenerateHook(state.campaigns[i]);if(a==='reject')state.campaigns[i]=rejectCampaign(state.campaigns[i]);if(a==='schedule')state.campaigns[i]=scheduleCampaign(state.campaigns[i]);if(a==='publish')state.campaigns[i]=simulatePublish(state.campaigns[i],state.settings.social);if(a==='toggle-connect')state.settings.social[id]=state.settings.social[id]==='connected'?'disconnected':'connected';if(a==='pause')alert('AUREXO is paused.');if(a==='reset')state=reset();persist()});document.querySelectorAll('[data-setting]').forEach(el=>el.onchange=()=>{state.settings[el.dataset.setting]=el.type==='checkbox'?el.checked:el.type==='number'?Number(el.value):el.value;persist()});document.querySelectorAll('[data-group]').forEach(el=>el.onchange=()=>{state.settings.integrationFlags[el.dataset.group][el.dataset.id]=el.checked;persist()})}
-addEventListener('hashchange',()=>{route=(location.hash||'#mission').slice(1);render()});render();
+import { validProject } from "./validation.js";
+import { AGENTS } from "./domain.js";
+const root = document.querySelector("#app");
+const esc = (s) =>
+  String(s ?? "").replace(
+    /[&<>"']/g,
+    (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
+        c
+      ],
+  );
+const read = (key, fallback) => {
+  try {
+    return JSON.parse(localStorage.getItem(key)) ?? fallback;
+  } catch {
+    return fallback;
+  }
+};
+let projects = read("aurexo_projects_v3", []),
+  backend = read("aurexo_backend_v3", ""),
+  authenticated = false,
+  providers = [],
+  busy = false,
+  message = "",
+  notice = "",
+  page = location.hash.slice(1) || "create";
+projects = Array.isArray(projects) ? projects.filter(validProject) : [];
+const nav = [
+  ["create", "Create"],
+  ["projects", "Projects"],
+  ["review", "Review"],
+  ["publish", "Publish"],
+  ["integrations", "Integrations"],
+];
+function persist() {
+  localStorage.setItem("aurexo_projects_v3", JSON.stringify(projects));
+}
+async function api(path, method = "GET", data) {
+  if (!backend)
+    throw Error("Connect your secure backend in Integrations first.");
+  const r = await fetch(backend + path, {
+    method,
+    credentials: "include",
+    headers: data ? { "Content-Type": "application/json" } : {},
+    body: data ? JSON.stringify(data) : undefined,
+    signal: AbortSignal.timeout(90000),
+  });
+  const b = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    if (r.status === 401) authenticated = false;
+    throw Error(b.error?.message || `Request failed (${r.status})`);
+  }
+  return b;
+}
+function download(name, text, type = "application/json") {
+  const url = URL.createObjectURL(new Blob([text], { type }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+const badge = (s) =>
+  `<span class="badge ${s === "approved" ? "success" : ""}">${esc(s)}</span>`;
+function card(p, detail = false) {
+  return `<article class="project"><div class="project-top"><div><small>${p.mode === "kids" ? "KIDS · " + esc(p.age) : "GENERAL CONTENT"}</small><h3>${esc(p.title)}</h3></div>${badge(p.state)}</div><p>${esc(p.plan?.script?.hook || "Your production brief is ready to write.")}</p><small>${p.provider ? esc(p.provider + " · " + p.model) : "Manual brief"} · ${new Date(p.createdAt).toLocaleDateString()}</small><div class="actions"><button data-action="open" data-id="${esc(p.id)}">${detail ? "Hide details" : "Open project"}</button><button data-action="export" data-id="${esc(p.id)}">Export brief</button></div>${detail ? details(p) : ""}</article>`;
+}
+let selected = null;
+function details(p) {
+  const plan = p.plan;
+  return `<div class="details">${
+    plan
+      ? `<h4>Script</h4><p class="script">${esc(plan.script.hook)}\n\n${esc(plan.script.body)}\n\n${esc(plan.script.cta)}</p><h4>Scene plan</h4>${plan.scenes.map((s, i) => `<div class="scene"><b>${i + 1}</b><div><p>${esc(s.visual)}</p><small>${esc(s.narration)}</small></div></div>`).join("")}<h4>Platform versions</h4>${Object.entries(
+          plan.variants,
+        )
+          .map(
+            ([k, v]) =>
+              `<details><summary>${esc(k)} · ${esc(v.title)}</summary><p>${esc(v.caption)}</p></details>`,
+          )
+          .join(
+            "",
+          )}<h4>Thumbnail direction</h4><p>${esc(plan.thumbnailPrompt || "Not provided")}</p><button data-action="cover" data-id="${esc(p.id)}">Download text cover (SVG)</button><h4>Review flags</h4><ul>${[...plan.reviewFlags, "Verify every factual claim against original sources.", "Create and inspect real media before publishing.", ...(p.mode === "kids" ? ["Adult review required for age suitability, rights and learning value."] : [])].map((x) => `<li>${esc(x)}</li>`).join("")}</ul>`
+      : "<p>This is a saved brief, not an AI-generated script. Connect a provider, then create an AI plan.</p>"
+  }<h4>Source notes</h4><p class="script">${esc(p.notes || "No source notes supplied.")}</p><h4>Activity</h4>${(p.audit || []).map((a) => `<p><small>${esc(a.at)} · ${esc(a.action)}</small></p>`).join("")}<button class="danger" data-action="delete" data-id="${esc(p.id)}">Delete project</button></div>`;
+}
+function create() {
+  return `<section class="intro"><small>YOUR CONTENT STUDIO</small><h1>What shall we create?</h1><p>Start with an idea. AUREXO prepares a script and scene plan for your review.</p></section><form id="create-form" class="panel create-form"><label>Topic or story idea<input name="topic" required maxlength="300" placeholder="For example: Why do rainbows appear?" autofocus></label><div class="two"><label>Content mode<select name="mode" id="mode"><option value="general">General content</option><option value="kids">Kids Content Mode</option></select></label><label id="age-label" hidden>Age group<select name="age"><option>3–5</option><option selected>6–8</option><option>9–12</option></select></label><label>AI provider<select name="provider"><option value="gemini">Gemini${providers.find((x) => x.id === "gemini")?.active ? " · active" : ""}</option><option value="openai">OpenAI${providers.find((x) => x.id === "openai")?.active ? " · active" : ""}</option></select></label></div><label>Source notes and learning goal<textarea name="notes" rows="5" maxlength="12000" placeholder="Paste reliable facts, source links and what your audience should learn. AI output still needs your review."></textarea></label><label class="check"><input name="usage" type="checkbox"> Allow this generation to use my provider account and quota</label><div class="actions"><button type="submit" class="primary" ${busy ? "disabled" : ""}>${busy ? "Preparing your plan…" : "Generate content plan"}</button><button type="button" data-action="save-brief">Save idea without AI</button></div><p class="hint">Scripts and scene plans are text. Video, voice and publishing are separate production steps.</p></form><details class="panel"><summary>Your 16-role team</summary><div class="team">${AGENTS.map(([n, d]) => `<div><b>${esc(n)}</b><p>${esc(d)}</p></div>`).join("")}</div><p class="hint">These are workflow responsibilities. Automated research, media production and performance analysis require additional connected services.</p></details>`;
+}
+function projectList() {
+  return `<section class="intro"><h1>Your projects</h1><p>Ideas, scripts and production briefs in one place.</p></section><div class="actions"><a class="button primary" href="#create">Create a project</a><button data-action="backup">Download backup</button><label class="button">Restore backup<input id="restore" type="file" accept="application/json" hidden></label>${authenticated ? '<button data-action="sync">Load server projects</button>' : ""}</div>${projects.length ? projects.map((p) => card(p, selected === p.id)).join("") : '<section class="panel empty">No projects yet. Start with one idea.</section>'}`;
+}
+function review() {
+  const items = projects.filter((p) => p.state === "review");
+  return `<section class="intro"><h1>Ready for your review</h1><p>Approve the content plan after checking its facts, rights and audience suitability. Approval does not publish anything.</p></section>${items.length ? items.map((p) => `<section class="panel">${card(p, selected === p.id)}<form class="review-form" data-id="${esc(p.id)}">${["I checked factual claims and source notes.", "I checked originality, rights and audience suitability.", "I understand this approves a plan; final media still needs review."].map((t, i) => `<label class="check"><input type="checkbox" name="check${i}" required>${t}</label>`).join("")}<div class="actions"><button class="primary">Approve plan</button><button type="button" data-action="revision" data-id="${esc(p.id)}">Request revision</button></div></form></section>`).join("") : '<section class="panel empty">Nothing waiting. Generated plans appear here.</section>'}`;
+}
+function publish() {
+  const items = projects.filter((p) => p.state === "approved");
+  return `<section class="intro"><h1>Prepare to publish</h1><p>Export approved scripts and platform copy for your production tools.</p></section><section class="panel callout"><b>Manual publishing</b><p>Automatic uploads and scheduling are not connected. AUREXO will not mark a video as published without confirmation from the platform. Generate or edit the actual video, review it, then upload in your platform’s studio.</p><div class="actions"><a class="button" href="https://studio.youtube.com" target="_blank" rel="noopener">YouTube Studio ↗</a><a class="button" href="https://business.facebook.com" target="_blank" rel="noopener">Meta Business Suite ↗</a></div></section>${items.length ? items.map((p) => card(p, selected === p.id)).join("") : '<section class="panel empty">Approved plans will appear here.</section>'}`;
+}
+function integrations() {
+  return `<section class="intro"><h1>Connect your tools</h1><p>Add your Gemini or OpenAI key when you are ready. A successful test activates that provider.</p></section><section class="panel"><h3>Secure backend</h3><form id="backend-form"><label>Backend URL<input name="url" type="url" required value="${esc(backend)}" placeholder="https://studio-api.example.com"></label><p class="hint">Use a backend on the same site as the app so secure sign-in cookies work.</p><button>Connect backend</button></form>${backend ? `<form id="login-form"><label>Owner password<input type="password" name="password" autocomplete="current-password" required minlength="16"></label><button ${authenticated ? "disabled" : ""}>${authenticated ? "Signed in" : "Sign in"}</button>${authenticated ? '<button type="button" data-action="logout">Sign out</button>' : ""}</form>` : ""}</section><div class="two">${[
+    "gemini",
+    "openai",
+  ]
+    .map((id) => {
+      const status = providers.find((p) => p.id === id);
+      return `<section class="panel"><div class="project-top"><h3>${id === "gemini" ? "Google Gemini" : "OpenAI"}</h3>${badge(status?.active ? "active" : "not connected")}</div><form class="provider-form" data-provider="${id}"><label>API key<input name="key" type="password" autocomplete="off" required placeholder="Enter key securely" minlength="10"></label><label>Model ID<input name="model" required maxlength="150" placeholder="Your provider’s model ID" value="${esc(status?.model || "")}"></label><label class="check"><input type="checkbox" name="usage" required>Allow a small API test using my provider quota</label><button class="primary" ${!authenticated || busy ? "disabled" : ""}>Save, test & activate</button>${status?.active ? `<button type="button" data-action="disconnect" data-provider="${id}">Disconnect</button>` : ""}</form><p class="hint">${status?.testedAt ? "Last tested " + esc(new Date(status.testedAt).toLocaleString()) : "Waiting for setup. No key is saved in this browser."}</p></section>`;
+    })
+    .join(
+      "",
+    )}</div><section class="panel"><h3>Production connections</h3><p>Text planning: ${providers.some((p) => p.active) ? "provider active" : "awaiting API key"}. Media rendering, voice/avatar generation, live discovery, social publishing and analytics remain unconnected. Provider activation enables text planning only.</p></section>`;
+}
+function render() {
+  root.innerHTML = `<div class="shell"><aside><a class="brand" href="#create"><i>A</i><div><b>AUREXO</b><small>CONTENT STUDIO</small></div></a><nav aria-label="Main navigation">${nav.map(([id, n]) => `<a href="#${id}" ${page === id ? 'aria-current="page"' : ""}>${n}${id === "review" && projects.some((p) => p.state === "review") ? ` <span>${projects.filter((p) => p.state === "review").length}</span>` : ""}</a>`).join("")}</nav><div class="foot">${authenticated ? "Backend signed in" : "Local drafts"}<small>${projects.length} projects</small></div></aside><main><header><span>Idea → Plan → Review → Produce</span><a href="#integrations">${providers.some((p) => p.active) ? "AI connected" : "Connect AI"}</a></header><div id="feedback" role="status" aria-live="polite">${message ? `<p class="error">${esc(message)}</p>` : ""}${notice ? `<p class="notice">${esc(notice)}</p>` : ""}</div>${({ create, projects: projectList, review, publish, integrations }[page] || create)()}<footer>Human approval stays in your hands.</footer></main></div>`;
+  bind();
+}
+async function action(fn) {
+  if (busy) return;
+  busy = true;
+  message = "";
+  notice = "";
+  try {
+    await fn();
+  } catch (e) {
+    message = e.message;
+  } finally {
+    busy = false;
+    render();
+  }
+}
+async function syncProviders() {
+  providers = (await api("/api/integrations")).providers;
+}
+async function saveProjects() {
+  persist();
+  if (authenticated) await api("/api/projects", "PUT", { projects });
+}
+function draft(form) {
+  const f = new FormData(form);
+  return {
+    id: crypto.randomUUID(),
+    title: String(f.get("topic") || "").trim(),
+    mode: f.get("mode"),
+    age: f.get("age"),
+    notes: f.get("notes"),
+    createdAt: new Date().toISOString(),
+    state: "draft",
+    audit: [],
+  };
+}
+function bind() {
+  const createForm = document.querySelector("#create-form");
+  if (createForm) {
+    createForm.onsubmit = (e) => {
+      e.preventDefault();
+      const f = new FormData(createForm);
+      action(async () => {
+        if (!f.get("usage"))
+          throw Error("Confirm provider usage before generating.");
+        const b = await api("/api/campaign/generate", "POST", {
+          ...draft(createForm),
+          topic: f.get("topic"),
+          provider: f.get("provider"),
+          allowUsage: true,
+        });
+        projects.unshift(b.project);
+        persist();
+        page = "review";
+        location.hash = "review";
+        notice = "Content plan created. Facts and media still need review.";
+      });
+    };
+    document.querySelector("#mode").onchange = (e) => {
+      document.querySelector("#age-label").hidden = e.target.value !== "kids";
+    };
+  }
+  document.querySelector("#backend-form")?.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const candidate = new FormData(e.target)
+      .get("url")
+      .trim()
+      .replace(/\/$/, "");
+    action(async () => {
+      const u = new URL(candidate);
+      if (
+        u.protocol !== "https:" ||
+        u.username ||
+        u.password ||
+        u.pathname !== "/" ||
+        u.search ||
+        u.hash
+      )
+        throw Error(
+          "Use an HTTPS backend origin without a path or credentials.",
+        );
+      const r = await fetch(candidate + "/api/health", {
+        signal: AbortSignal.timeout(10000),
+      });
+      const h = await r.json();
+      if (!r.ok || h.version !== "2.0.0")
+        throw Error("Connect the AUREXO Studio v2 backend.");
+      backend = candidate;
+      localStorage.setItem("aurexo_backend_v3", JSON.stringify(backend));
+      authenticated = false;
+      providers = [];
+      notice = "Backend connected. Sign in to manage your integrations.";
+    });
+  });
+  document.querySelector("#login-form")?.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const password = new FormData(e.target).get("password");
+    action(async () => {
+      await api("/api/session", "POST", { password });
+      authenticated = true;
+      await syncProviders();
+      const saved = (await api("/api/projects")).projects;
+      projects = [
+        ...saved,
+        ...projects.filter((p) => !saved.some((s) => s.id === p.id)),
+      ];
+      persist();
+      notice = "Signed in. Keys can now be saved securely.";
+    });
+  });
+  document.querySelectorAll(".provider-form").forEach(
+    (form) =>
+      (form.onsubmit = (e) => {
+        e.preventDefault();
+        const f = new FormData(form);
+        const key = f.get("key");
+        form.querySelector("[name=key]").value = "";
+        action(async () => {
+          await api("/api/integrations", "POST", {
+            provider: form.dataset.provider,
+            key,
+            model: f.get("model"),
+            allowUsage: Boolean(f.get("usage")),
+          });
+          await syncProviders();
+          notice = "Connection tested and activated.";
+        });
+      }),
+  );
+  document.querySelectorAll(".review-form").forEach(
+    (form) =>
+      (form.onsubmit = (e) => {
+        e.preventDefault();
+        action(async () => {
+          const p = projects.find((p) => p.id === form.dataset.id);
+          if (!p?.plan) throw Error("No generated plan to approve.");
+          p.state = "approved";
+          p.audit.push({
+            at: new Date().toISOString(),
+            action: "Owner approved plan; final media not approved",
+          });
+          await saveProjects();
+          notice = "Plan approved. Export it from Publish.";
+        });
+      }),
+  );
+  document.querySelector("#restore")?.addEventListener("change", (e) =>
+    action(async () => {
+      const file = e.target.files[0];
+      if (!file || file.size > 500000)
+        throw Error("Choose an AUREXO backup under 500 KB.");
+      const data = JSON.parse(await file.text());
+      if (
+        !Array.isArray(data.projects) ||
+        data.projects.length > 200 ||
+        data.projects.some((p) => !validProject(p))
+      )
+        throw Error("Invalid backup.");
+      if (!confirm("Replace local projects with this backup?")) return;
+      projects = data.projects;
+      persist();
+      notice = "Backup restored locally. Server data was not replaced.";
+    }),
+  );
+  document.querySelectorAll("[data-action]").forEach(
+    (button) =>
+      (button.onclick = () => {
+        const a = button.dataset.action,
+          id = button.dataset.id,
+          p = projects.find((p) => p.id === id);
+        if (a === "open") {
+          selected = selected === id ? null : id;
+          render();
+          return;
+        }
+        if (a === "export") {
+          download("aurexo-brief.json", JSON.stringify(p, null, 2));
+          return;
+        }
+        if (a === "backup") {
+          download(
+            "aurexo-backup.json",
+            JSON.stringify({ version: 3, projects }, null, 2),
+          );
+          return;
+        }
+        if (a === "cover") {
+          const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720"><rect width="1280" height="720" fill="#172f29"/><text x="80" y="120" fill="#d3ec9d" font-family="sans-serif" font-size="32">AUREXO</text><foreignObject x="80" y="220" width="1100" height="400"><div xmlns="http://www.w3.org/1999/xhtml" style="font:700 66px sans-serif;color:white;overflow-wrap:anywhere">${esc(p.title)}</div></foreignObject></svg>`;
+          download("aurexo-cover.svg", svg, "image/svg+xml");
+          return;
+        }
+        action(async () => {
+          if (a === "save-brief") {
+            if (!createForm.reportValidity()) return;
+            projects.unshift(draft(createForm));
+            await saveProjects();
+            notice = "Idea saved.";
+            page = "projects";
+            location.hash = page;
+          }
+          if (a === "logout") {
+            await api("/api/session", "DELETE");
+            authenticated = false;
+            providers = [];
+          }
+          if (a === "disconnect") {
+            await api("/api/integrations", "DELETE", {
+              provider: button.dataset.provider,
+            });
+            await syncProviders();
+            notice = "Provider disconnected.";
+          }
+          if (a === "sync") {
+            const b = await api("/api/projects");
+            if (
+              projects.length &&
+              !confirm("Replace local projects with server projects?")
+            )
+              return;
+            projects = b.projects;
+            persist();
+            notice = "Server projects loaded.";
+          }
+          if (a === "delete") {
+            if (!confirm("Delete this project?")) return;
+            projects = projects.filter((x) => x.id !== id);
+            await saveProjects();
+          }
+          if (a === "revision") {
+            p.state = "draft";
+            p.audit.push({
+              at: new Date().toISOString(),
+              action: "Owner requested revision",
+            });
+            await saveProjects();
+            notice =
+              "Moved to drafts. Export the brief or create an updated plan.";
+          }
+        });
+      }),
+  );
+}
+addEventListener("hashchange", () => {
+  page = location.hash.slice(1) || "create";
+  message = "";
+  notice = "";
+  render();
+});
+render();
+if (backend)
+  api("/api/session")
+    .then(async (s) => {
+      authenticated = s.authenticated;
+      if (authenticated) await syncProviders();
+      render();
+    })
+    .catch(() => {});

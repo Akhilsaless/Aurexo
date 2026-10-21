@@ -1,33 +1,25 @@
-# AUREXO Cloudflare backend setup
+# Cloudflare deployment: Studio v2
 
-AUREXO's public frontend stays on GitHub Pages. The Worker in `cloudflare-worker/` is the secure runtime for API secrets, AI routing and social OAuth.
+Deploy the static app and backend together so secure SameSite cookies work. A GitHub Pages page calling an unrelated workers.dev origin is not supported by this session model.
 
-## Deploy
-1. In Cloudflare, create/import a Worker from the GitHub repository `Akhilsaless/Aurexo`.
-2. Set the project/root directory to `cloudflare-worker`.
-3. Deploy using Wrangler (`npm run deploy`).
-4. Ensure the `AUREXO_KV` binding exists. If Cloudflare does not auto-provision it from `wrangler.toml`, create a KV namespace and bind it as `AUREXO_KV`.
-5. Copy the resulting `https://<worker>.workers.dev` URL.
+1. Run `npm ci`, `npm test`, `npm run check`, and `npm run build` at the repository root.
+2. Install backend development dependencies in `cloudflare-worker` using `npm install`.
+3. Create a Cloudflare KV namespace. Add its ID to the `AUREXO_KV` binding in `cloudflare-worker/wrangler.toml`.
+4. Set `AUREXO_ALLOWED_ORIGIN` to the exact HTTPS origin that will serve the app (no trailing slash or path). Update `AUREXO_FRONTEND_URL` to match.
+5. Set Worker secrets using Cloudflare's secure dashboard or `wrangler secret put`: `AUREXO_OWNER_PASSWORD` (unique, at least 16 characters) and `AUREXO_ENCRYPTION_KEY` (64 random hexadecimal characters; preserve it securely across redeployments). Never commit these values.
+6. Deploy from `cloudflare-worker` using `npm run deploy`. Wrangler serves `../dist` through its ASSETS binding and `/api/*` through `src/studio.js`.
+7. Open the deployed app, enter that same origin in Integrations, then sign in using the owner password.
+8. When ready, enter Gemini or OpenAI API key plus an accessible model ID. Confirm the small connection test. The key is tested, encrypted with AES-GCM in KV, and activated only on success. No provider key is needed during initial development.
+9. Generate one small test plan, reload, sign in again, recover server projects, review and export. Run these checks with actual provider accounts before enabling everyday usage.
 
-## Secrets
-Add only the services you want. Paid services can remain absent/off.
+Owner password, session and provider key values must never be entered in GitHub issues, commits or chat. Provider keys are stored encrypted; only status, model and test time are returned by the API. Rotating the encryption key requires re-entering provider keys.
 
-AI Hub: `AI_HUB_URL`, optional `AI_HUB_API_KEY`.
-AI fallbacks: `OPENROUTER_API_KEY` + `OPENROUTER_MODEL`; `GROQ_API_KEY` + `GROQ_MODEL`; `QWEN_API_KEY` + `QWEN_BASE_URL` + `QWEN_MODEL`; `DEEPSEEK_API_KEY` + `DEEPSEEK_MODEL`; `KIMI_API_KEY` + `KIMI_BASE_URL` + `KIMI_MODEL`; `GEMINI_OPENAI_API_KEY` + `GEMINI_OPENAI_BASE_URL` + `GEMINI_MODEL`; optional paid `OPENAI_API_KEY` + `OPENAI_MODEL`.
+## Security and operational limitations
 
-YouTube: `YOUTUBE_CLIENT_ID`, `YOUTUBE_CLIENT_SECRET`.
-Meta: `META_APP_ID`, `META_APP_SECRET`; optional `META_GRAPH_VERSION`.
-Video slots: `RUNWAY_API_KEY`, `PIKA_API_KEY`, `KLING_API_KEY`, `HAILUO_API_KEY`, plus provider base URLs where required. Open/self-hosted Wan/Hunyuan can use their own base URLs.
-
-Never put provider secrets in the GitHub Pages frontend or commit them to this repository.
-
-## OAuth redirect URIs
-After deployment, configure provider developer consoles to use:
-- YouTube/Google: `https://<worker>.workers.dev/api/oauth/youtube/callback`
-- Meta: `https://<worker>.workers.dev/api/oauth/meta/callback`
-
-## Verification
-Open `https://<worker>.workers.dev/api/health`. It should return JSON containing `"ok": true`.
-Open `/api/providers` to see which provider slots are configured without exposing secret values.
-
-The Worker enforces explicit campaign approval before its social publish route will proceed and never reports a fake publication when no real media has been supplied.
+- Single-owner deployment; not a multi-user SaaS identity system.
+- KV is eventually consistent. Login throttling is best effort; configure Cloudflare edge rate limiting before public exposure. Concurrent edits from multiple tabs/devices may overwrite each other; conflict-safe persistence remains a release gate.
+- Sessions expire after eight hours. Sign out revokes the current session. Rotate credentials and clear sessions through server administration if compromise is suspected.
+- Backup files include scripts and source notes; store them privately. Provider keys and owner credentials are excluded.
+- Same-origin hosting is recommended. No wildcard CORS and no browser-side provider API calls.
+- The original `src/index.js` Worker entry is legacy code and is not deployed. The configured entry is `src/studio.js`; legacy AI/OAuth endpoints return no capability from this API.
+- Provider calls have a timeout. There is no automatic retry that might duplicate paid requests. Provider quota and spend enforcement must be configured in provider dashboards until measured budgets exist.
