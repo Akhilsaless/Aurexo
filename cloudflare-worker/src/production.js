@@ -38,6 +38,16 @@ async function apiJson(url, options = {}) {
 }
 async function config(env, type) {
   const v = await get(env, "social-config:" + type);
+  if (
+    !v &&
+    type === "youtube" &&
+    env.GOOGLE_CLIENT_ID &&
+    env.GOOGLE_CLIENT_SECRET
+  )
+    return {
+      clientId: env.GOOGLE_CLIENT_ID,
+      clientSecret: env.GOOGLE_CLIENT_SECRET,
+    };
   if (!v)
     throw problem(409, "Configure this social app in Integrations first.");
   return unseal(env, v);
@@ -253,7 +263,12 @@ export async function productionRoute(env, req, reply) {
         cfg = await get(env, "social-config:" + type);
       const t = saved ? await unseal(env, saved) : null;
       status[type] = {
-        configured: Boolean(cfg),
+        configured: Boolean(
+          cfg ||
+          (type === "youtube" &&
+            env.GOOGLE_CLIENT_ID &&
+            env.GOOGLE_CLIENT_SECRET),
+        ),
         connected: Boolean(t),
         account: t?.accountName || "",
         instagram: Boolean(t?.instagramId),
@@ -418,11 +433,15 @@ export async function productionRoute(env, req, reply) {
         ...current,
         finalApproval: {
           at: new Date().toISOString(),
+          actor: env.ACTOR || { role: "owner" },
           mediaKey: current.media.key,
           planJSON: JSON.stringify(current.plan),
           checks: b.checks,
         },
-        audit: audit(current, "Owner approved the current final media"),
+        audit: audit(
+          current,
+          `${env.ACTOR?.email || env.ACTOR?.role || "Owner"} approved the current final media`,
+        ),
       };
     });
     return reply(result);
@@ -572,6 +591,7 @@ export async function productionRoute(env, req, reply) {
       privacy: b.privacy === "public" ? "public" : "unlisted",
       createdAt: new Date().toISOString(),
       origin: u.origin,
+      actor: env.ACTOR || { role: "owner" },
       attempts: 0,
     };
     if (jobs.length >= 500)

@@ -102,6 +102,20 @@ test("owner approval requires a verified pending request and health reports inva
   assert.equal(health.ownerConfigured, false);
   assert.equal(health.encryptionConfigured, false);
 });
+
+test("YouTube reuses the configured Google client without exposing its secret", async () => {
+  const s = setup();
+  const cookie = (await issueSession(s.env, { email: "owner@gmail.com" })).split(";")[0];
+  const status = await (await s.request("/api/social/status", "GET", null, cookie)).json();
+  assert.equal(status.status.youtube.configured, true);
+  assert.equal(JSON.stringify(status).includes(s.env.GOOGLE_CLIENT_SECRET), false);
+  const result = await s.request("/api/social/connect", "POST", { type: "youtube" }, cookie);
+  assert.equal(result.status, 200);
+  const target = new URL((await result.json()).url);
+  assert.equal(target.searchParams.get("client_id"), s.env.GOOGLE_CLIENT_ID);
+  assert.equal(target.searchParams.get("redirect_uri"), "https://studio.test/api/oauth/youtube/callback");
+  assert.equal(target.searchParams.has("client_secret"), false);
+});
 test("Google callback verifies signature, audience and nonce; unapproved accounts get no project session", async () => {
   const s = setup(),
     originalFetch = globalThis.fetch;
