@@ -15,3 +15,7 @@ jobs:
       - run: npm run check
       - run: npm test
       - run: npm run build
+      - run: npm run verify:runtime
+      - run: npx wrangler deploy --dry-run --config cloudflare-worker/wrangler.toml
+        env:
+          WRANGLER_SEND_METRICS: "false"

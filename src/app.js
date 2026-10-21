@@ -1,3 +1,14 @@
+import { migrateLegacy } from "./migration.js";
+import {
+  researchPanel,
+  editor,
+  mediaPanel,
+  publishControls,
+  socialSettings,
+  growthPanel,
+  discoveryPanel,
+  bindProduction,
+} from "./production-ui.js";
 import { validProject } from "./validation.js";
 import { AGENTS } from "./domain.js";
 const root = document.querySelector("#app");
@@ -25,6 +36,8 @@ let projects = read("aurexo_projects_v3", []),
   notice = "",
   page = location.hash.slice(1) || "create";
 projects = Array.isArray(projects) ? projects.filter(validProject) : [];
+let serverRevision = 0,
+  afterRenderTask = null;
 const nav = [
   ["create", "Create"],
   ["projects", "Projects"],
@@ -81,13 +94,13 @@ function details(p) {
             "",
           )}<h4>Thumbnail direction</h4><p>${esc(plan.thumbnailPrompt || "Not provided")}</p><button data-action="cover" data-id="${esc(p.id)}">Download text cover (SVG)</button><h4>Review flags</h4><ul>${[...plan.reviewFlags, "Verify every factual claim against original sources.", "Create and inspect real media before publishing.", ...(p.mode === "kids" ? ["Adult review required for age suitability, rights and learning value."] : [])].map((x) => `<li>${esc(x)}</li>`).join("")}</ul>`
       : "<p>This is a saved brief, not an AI-generated script. Connect a provider, then create an AI plan.</p>"
-  }<h4>Source notes</h4><p class="script">${esc(p.notes || "No source notes supplied.")}</p><h4>Activity</h4>${(p.audit || []).map((a) => `<p><small>${esc(a.at)} · ${esc(a.action)}</small></p>`).join("")}<button class="danger" data-action="delete" data-id="${esc(p.id)}">Delete project</button></div>`;
+  }${editor(p)}${researchPanel(p)}${p.plan ? mediaPanel(p, backend) : ""}<h4>Source notes</h4><p class="script">${esc(p.notes || "No source notes supplied.")}</p><h4>Activity</h4>${(p.audit || []).map((a) => `<p><small>${esc(a.at)} · ${esc(a.action)}</small></p>`).join("")}<button class="danger" data-action="delete" data-id="${esc(p.id)}">Delete project</button></div>`;
 }
 function create() {
-  return `<section class="intro"><small>YOUR CONTENT STUDIO</small><h1>What shall we create?</h1><p>Start with an idea. AUREXO prepares a script and scene plan for your review.</p></section><form id="create-form" class="panel create-form"><label>Topic or story idea<input name="topic" required maxlength="300" placeholder="For example: Why do rainbows appear?" autofocus></label><div class="two"><label>Content mode<select name="mode" id="mode"><option value="general">General content</option><option value="kids">Kids Content Mode</option></select></label><label id="age-label" hidden>Age group<select name="age"><option>3–5</option><option selected>6–8</option><option>9–12</option></select></label><label>AI provider<select name="provider"><option value="gemini">Gemini${providers.find((x) => x.id === "gemini")?.active ? " · active" : ""}</option><option value="openai">OpenAI${providers.find((x) => x.id === "openai")?.active ? " · active" : ""}</option></select></label></div><label>Source notes and learning goal<textarea name="notes" rows="5" maxlength="12000" placeholder="Paste reliable facts, source links and what your audience should learn. AI output still needs your review."></textarea></label><label class="check"><input name="usage" type="checkbox"> Allow this generation to use my provider account and quota</label><div class="actions"><button type="submit" class="primary" ${busy ? "disabled" : ""}>${busy ? "Preparing your plan…" : "Generate content plan"}</button><button type="button" data-action="save-brief">Save idea without AI</button></div><p class="hint">Scripts and scene plans are text. Video, voice and publishing are separate production steps.</p></form><details class="panel"><summary>Your 16-role team</summary><div class="team">${AGENTS.map(([n, d]) => `<div><b>${esc(n)}</b><p>${esc(d)}</p></div>`).join("")}</div><p class="hint">These are workflow responsibilities. Automated research, media production and performance analysis require additional connected services.</p></details>`;
+  return `<section class="intro"><small>YOUR CONTENT STUDIO</small><h1>What shall we create?</h1><p>Start with an idea. AUREXO prepares a script and scene plan for your review.</p></section><form id="create-form" class="panel create-form"><label>Topic or story idea<input name="topic" required maxlength="300" placeholder="For example: Why do rainbows appear?" autofocus></label><div class="two"><label>Content mode<select name="mode" id="mode"><option value="general">General content</option><option value="kids">Kids Content Mode</option></select></label><label id="age-label" hidden>Age group<select name="age"><option>3–5</option><option selected>6–8</option><option>9–12</option></select></label><label>AI provider<select name="provider"><option value="gemini">Gemini${providers.find((x) => x.id === "gemini")?.active ? " · active" : ""}</option><option value="openai">OpenAI${providers.find((x) => x.id === "openai")?.active ? " · active" : ""}</option></select></label></div><label>Source notes and learning goal<textarea name="notes" rows="5" maxlength="12000" placeholder="Paste reliable facts, source links and what your audience should learn. AI output still needs your review."></textarea></label><label class="check"><input name="usage" type="checkbox"> Allow this generation to use my provider account and quota</label><div class="actions"><button type="submit" class="primary" ${busy ? "disabled" : ""}>${busy ? "Preparing your plan…" : "Generate content plan"}</button><button type="button" data-action="save-brief">Save idea without AI</button></div><p class="hint">Scripts and scene plans are text. Video, voice and publishing are separate production steps.</p></form>${discoveryPanel()}<details class="panel"><summary>Your 16-role team</summary><div class="team">${AGENTS.map(([n, d]) => `<div><b>${esc(n)}</b><p>${esc(d)}</p></div>`).join("")}</div><p class="hint">These are workflow responsibilities. Automated research, media production and performance analysis require additional connected services.</p></details>`;
 }
 function projectList() {
-  return `<section class="intro"><h1>Your projects</h1><p>Ideas, scripts and production briefs in one place.</p></section><div class="actions"><a class="button primary" href="#create">Create a project</a><button data-action="backup">Download backup</button><label class="button">Restore backup<input id="restore" type="file" accept="application/json" hidden></label>${authenticated ? '<button data-action="sync">Load server projects</button>' : ""}</div>${projects.length ? projects.map((p) => card(p, selected === p.id)).join("") : '<section class="panel empty">No projects yet. Start with one idea.</section>'}`;
+  return `<section class="intro"><h1>Your projects</h1><p>Ideas, scripts and production briefs in one place.</p></section><div class="actions"><a class="button primary" href="#create">Create a project</a><button data-action="backup">Download backup</button><button data-action="migrate">Import earlier AUREXO drafts</button><label class="button">Restore backup<input id="restore" type="file" accept="application/json" hidden></label>${authenticated ? '<button data-action="sync">Load server projects</button>' : ""}</div>${projects.length ? projects.map((p) => card(p, selected === p.id)).join("") : '<section class="panel empty">No projects yet. Start with one idea.</section>'}`;
 }
 function review() {
   const items = projects.filter((p) => p.state === "review");
@@ -95,7 +108,7 @@ function review() {
 }
 function publish() {
   const items = projects.filter((p) => p.state === "approved");
-  return `<section class="intro"><h1>Prepare to publish</h1><p>Export approved scripts and platform copy for your production tools.</p></section><section class="panel callout"><b>Manual publishing</b><p>Automatic uploads and scheduling are not connected. AUREXO will not mark a video as published without confirmation from the platform. Generate or edit the actual video, review it, then upload in your platform’s studio.</p><div class="actions"><a class="button" href="https://studio.youtube.com" target="_blank" rel="noopener">YouTube Studio ↗</a><a class="button" href="https://business.facebook.com" target="_blank" rel="noopener">Meta Business Suite ↗</a></div></section>${items.length ? items.map((p) => card(p, selected === p.id)).join("") : '<section class="panel empty">Approved plans will appear here.</section>'}`;
+  return `<section class="intro"><h1>Prepare to publish</h1><p>Export approved scripts and platform copy for your production tools.</p></section><section class="panel callout"><b>Publish with your approval</b><p>Render or upload your video, approve its final media, then queue it for a connected account. Jobs show a confirmed upload only after the platform returns its video ID. You can also export files for manual upload.</p><div class="actions"><a class="button" href="https://studio.youtube.com" target="_blank" rel="noopener">YouTube Studio ↗</a><a class="button" href="https://business.facebook.com" target="_blank" rel="noopener">Meta Business Suite ↗</a></div></section>${items.length ? items.map((p) => card(p, selected === p.id) + publishControls(p)).join("") : '<section class="panel empty">Approved plans will appear here.</section>'}`;
 }
 function integrations() {
   return `<section class="intro"><h1>Connect your tools</h1><p>Add your Gemini or OpenAI key when you are ready. A successful test activates that provider.</p></section><section class="panel"><h3>Secure backend</h3><form id="backend-form"><label>Backend URL<input name="url" type="url" required value="${esc(backend)}" placeholder="https://studio-api.example.com"></label><p class="hint">Use a backend on the same site as the app so secure sign-in cookies work.</p><button>Connect backend</button></form>${backend ? `<form id="login-form"><label>Owner password<input type="password" name="password" autocomplete="current-password" required minlength="16"></label><button ${authenticated ? "disabled" : ""}>${authenticated ? "Signed in" : "Sign in"}</button>${authenticated ? '<button type="button" data-action="logout">Sign out</button>' : ""}</form>` : ""}</section><div class="two">${[
@@ -108,11 +121,14 @@ function integrations() {
     })
     .join(
       "",
-    )}</div><section class="panel"><h3>Production connections</h3><p>Text planning: ${providers.some((p) => p.active) ? "provider active" : "awaiting API key"}. Media rendering, voice/avatar generation, live discovery, social publishing and analytics remain unconnected. Provider activation enables text planning only.</p></section>`;
+    )}</div>${socialSettings()}${growthPanel()}<section class="panel"><h3>Production connections</h3><p>Text planning: ${providers.some((p) => p.active) ? "provider active" : "awaiting API key"}. Local video rendering and uploads are available in each project. Connect social apps for publishing and performance sync. AI narration uses an active OpenAI account.</p></section>`;
 }
 function render() {
   root.innerHTML = `<div class="shell"><aside><a class="brand" href="#create"><i>A</i><div><b>AUREXO</b><small>CONTENT STUDIO</small></div></a><nav aria-label="Main navigation">${nav.map(([id, n]) => `<a href="#${id}" ${page === id ? 'aria-current="page"' : ""}>${n}${id === "review" && projects.some((p) => p.state === "review") ? ` <span>${projects.filter((p) => p.state === "review").length}</span>` : ""}</a>`).join("")}</nav><div class="foot">${authenticated ? "Backend signed in" : "Local drafts"}<small>${projects.length} projects</small></div></aside><main><header><span>Idea → Plan → Review → Produce</span><a href="#integrations">${providers.some((p) => p.active) ? "AI connected" : "Connect AI"}</a></header><div id="feedback" role="status" aria-live="polite">${message ? `<p class="error">${esc(message)}</p>` : ""}${notice ? `<p class="notice">${esc(notice)}</p>` : ""}</div>${({ create, projects: projectList, review, publish, integrations }[page] || create)()}<footer>Human approval stays in your hands.</footer></main></div>`;
   bind();
+  const task = afterRenderTask;
+  afterRenderTask = null;
+  task?.();
 }
 async function action(fn) {
   if (busy) return;
@@ -133,8 +149,30 @@ async function syncProviders() {
 }
 async function saveProjects() {
   persist();
-  if (authenticated) await api("/api/projects", "PUT", { projects });
+  if (authenticated) {
+    const result = await api("/api/projects", "PUT", {
+      projects,
+      revision: serverRevision,
+    });
+    applySnapshot(result);
+  }
 }
+function applySnapshot(result) {
+  if (result.projects) {
+    const local = projects;
+    projects = result.projects.map((p) => ({
+      ...p,
+      ...Object.fromEntries(
+        Object.entries(local.find((l) => l.id === p.id) || {}).filter(([k]) =>
+          k.startsWith("local"),
+        ),
+      ),
+    }));
+    persist();
+  }
+  if (result.revision !== undefined) serverRevision = result.revision;
+}
+
 function draft(form) {
   const f = new FormData(form);
   return {
@@ -164,6 +202,7 @@ function bind() {
           allowUsage: true,
         });
         projects.unshift(b.project);
+        serverRevision = b.revision;
         persist();
         page = "review";
         location.hash = "review";
@@ -213,7 +252,9 @@ function bind() {
       await api("/api/session", "POST", { password });
       authenticated = true;
       await syncProviders();
-      const saved = (await api("/api/projects")).projects;
+      const remote = await api("/api/projects");
+      serverRevision = remote.revision;
+      const saved = remote.projects;
       projects = [
         ...saved,
         ...projects.filter((p) => !saved.some((s) => s.id === p.id)),
@@ -248,6 +289,8 @@ function bind() {
         action(async () => {
           const p = projects.find((p) => p.id === form.dataset.id);
           if (!p?.plan) throw Error("No generated plan to approve.");
+          if (!form.reportValidity())
+            throw Error("Complete all plan-review checks.");
           p.state = "approved";
           p.audit.push({
             at: new Date().toISOString(),
@@ -304,6 +347,15 @@ function bind() {
           return;
         }
         action(async () => {
+          if (a === "migrate") {
+            const old = read("aurexo_v2_state", {});
+            const imported = migrateLegacy(old.campaigns, projects);
+            projects = [...projects, ...imported];
+            await saveProjects();
+            notice =
+              imported.length +
+              " earlier drafts imported for review. Previous data remains untouched.";
+          }
           if (a === "save-brief") {
             if (!createForm.reportValidity()) return;
             projects.unshift(draft(createForm));
@@ -331,8 +383,7 @@ function bind() {
               !confirm("Replace local projects with server projects?")
             )
               return;
-            projects = b.projects;
-            persist();
+            applySnapshot(b);
             notice = "Server projects loaded.";
           }
           if (a === "delete") {
@@ -348,11 +399,25 @@ function bind() {
             });
             await saveProjects();
             notice =
-              "Moved to drafts. Export the brief or create an updated plan.";
+              "Moved to drafts. Open the project to edit its script and scenes.";
           }
         });
       }),
   );
+  bindProduction({
+    projects: () => projects,
+    api,
+    backend: () => backend,
+    action,
+    save: saveProjects,
+    apply: applySnapshot,
+    notify: (text) => {
+      notice = text;
+    },
+    afterRender: (fn) => {
+      afterRenderTask = fn;
+    },
+  });
 }
 addEventListener("hashchange", () => {
   page = location.hash.slice(1) || "create";
@@ -361,11 +426,31 @@ addEventListener("hashchange", () => {
   render();
 });
 render();
-if (backend)
-  api("/api/session")
-    .then(async (s) => {
-      authenticated = s.authenticated;
-      if (authenticated) await syncProviders();
-      render();
-    })
-    .catch(() => {});
+async function initializeBackend() {
+  if (!backend) {
+    try {
+      const response = await fetch(new URL("/api/health", location.href), {
+        signal: AbortSignal.timeout(5000),
+      });
+      const health = await response.json();
+      if (health.service === "AUREXO Studio" && health.version === "2.0.0") {
+        backend = location.origin;
+        localStorage.setItem("aurexo_backend_v3", JSON.stringify(backend));
+        render();
+      }
+    } catch {}
+  }
+  if (backend)
+    api("/api/session")
+      .then(async (s) => {
+        authenticated = s.authenticated;
+        if (authenticated) {
+          await syncProviders();
+          const snapshot = await api("/api/projects");
+          serverRevision = snapshot.revision;
+        }
+        render();
+      })
+      .catch(() => {});
+}
+initializeBackend();

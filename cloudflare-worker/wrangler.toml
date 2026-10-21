@@ -1,14 +1,18 @@
 name = "aurexo-backend"
-main = "src/studio.js"
+main = "src/runtime.js"
 compatibility_date = "2026-08-01"
-
 [assets]
 directory = "../dist"
 binding = "ASSETS"
 run_worker_first = true
-
-# Same-origin requests are accepted by default. Set AUREXO_ALLOWED_ORIGIN
-# only when using a separate API origin on the same site.
-
-[[kv_namespaces]]
-binding = "AUREXO_KV"
+[[durable_objects.bindings]]
+name = "STUDIO"
+class_name = "StudioRuntime"
+[[migrations]]
+tag = "v1-studio"
+new_sqlite_classes = ["StudioRuntime"]
+[[r2_buckets]]
+binding = "MEDIA"
+bucket_name = "aurexo-media"
+[observability]
+enabled = true
