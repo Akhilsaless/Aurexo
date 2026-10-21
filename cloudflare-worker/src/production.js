@@ -594,7 +594,8 @@ export async function productionRoute(env, req, reply) {
     const t = await token(
       env,
       b.platform === "youtube" ? "youtube" : "meta",
-      channelSlot(p.mode),
+      channelSlot(b.channelSlot || p.mode),
+      b.accountId,
     );
     if (b.platform === "instagram" && !t.instagramId)
       throw problem(
@@ -623,7 +624,7 @@ export async function productionRoute(env, req, reply) {
       id: crypto.randomUUID(),
       projectId: p.id,
       platform: b.platform,
-      channelSlot: channelSlot(p.mode),
+      channelSlot: channelSlot(b.channelSlot || p.mode),
       accountId: t.accountId,
       accountName: t.accountName,
       mediaKey: p.media.key,

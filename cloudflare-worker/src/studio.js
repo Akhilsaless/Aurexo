@@ -1,3 +1,4 @@
+import { autopilotRoute } from "./autopilot.js";
 import { PROFILES } from "../../src/profiles.js";
 import {
   authRoute,
@@ -281,6 +282,12 @@ async function routes(env, req, reply) {
     );
   const team = await teamRoute(env, req, reply, identity, body);
   if (team) return team;
+  const automatic = await autopilotRoute(
+    { ...env, ACTOR: { role: identity.role, email: identity.email || null } },
+    req,
+    reply,
+  );
+  if (automatic) return automatic;
   const animated = await animationRoute(env, req, reply);
   if (animated) return animated;
   if (path === "/api/session" && method === "DELETE") {

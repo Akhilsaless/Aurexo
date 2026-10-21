@@ -1,3 +1,4 @@
+import { autopilotPanel } from "../src/autopilot-ui.js";
 import { PROFILES, profileName } from "../src/profiles.js";
 import { migrateLegacy } from "../src/migration.js";
 import { test } from "node:test";
@@ -38,6 +39,8 @@ function app(data = {}) {
     setTimeout,
     clearTimeout,
     AGENTS,
+    autopilotPanel,
+    bindAutopilot: () => {},
     PROFILES,
     profileName,
     migrateLegacy,

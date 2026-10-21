@@ -24,6 +24,7 @@ for (const file of [
   "src/integration-registry.js",
   "src/validation.js",
   "src/profiles.js",
+  "src/autopilot-ui.js",
   "src/quality.js",
   "src/migration.js",
   "src/media.js",
