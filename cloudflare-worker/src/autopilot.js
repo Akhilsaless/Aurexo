@@ -53,10 +53,9 @@ export async function autopilotRoute(env, req, reply) {
     const runs = ((await read(env, "autopilot")) || []).map(
       ({ assemblyLease, ...r }) => ({
         ...r,
-        review:
-          r.state === "review"
-            ? projects.find((p) => p.id === r.projectId)?.plan
-            : undefined,
+        review: ["review", "needs_attention", "generating"].includes(r.state)
+          ? projects.find((p) => p.id === r.projectId)?.plan
+          : undefined,
       }),
     );
     return reply({ runs, channels });
@@ -80,8 +79,13 @@ export async function autopilotRoute(env, req, reply) {
     const c = await credentials(env, "gemini");
     if (!c.active) throw problem(409, "Activate Gemini in Integrations first");
     const today = new Date().toISOString().slice(0, 10);
-    const used = ((await read(env, "animations")) || []).filter((j) =>
-      j.createdAt.startsWith(today),
+    const used = ((await read(env, "animations")) || []).filter(
+      (j) =>
+        j.createdAt.startsWith(today) &&
+        !(
+          j.providerRejected ||
+          /^Google video request failed \(429\)/.test(j.message || "")
+        ),
     ).length;
     if (used + 3 > Number(env.AUREXO_DAILY_VIDEO_LIMIT ?? 3))
       throw problem(
