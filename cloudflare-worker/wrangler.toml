@@ -1,11 +1,14 @@
 name = "aurexo-backend"
-main = "src/index.js"
+main = "src/studio.js"
 compatibility_date = "2026-08-01"
 
-[vars]
-AUREXO_ALLOWED_ORIGIN = "https://akhilsaless.github.io"
-AUREXO_FRONTEND_URL = "https://akhilsaless.github.io/Aurexo/"
-AUREXO_ZERO_COST_DEFAULT = "true"
+[assets]
+directory = "../dist"
+binding = "ASSETS"
+run_worker_first = true
+
+# Same-origin requests are accepted by default. Set AUREXO_ALLOWED_ORIGIN
+# only when using a separate API origin on the same site.
 
 [[kv_namespaces]]
 binding = "AUREXO_KV"

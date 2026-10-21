@@ -1,17 +1,36 @@
-# AUREXO — AI Media Operating System
+# AUREXO Studio
 
-AUREXO is a personal, free-first multi-platform AI media control room for YouTube, Instagram and Facebook.
+A simpler, single-owner content planning workspace built from the existing AUREXO repository. The five screens are Create, Projects, Review, Publish and Integrations. Kids Content Mode configures the existing 16-role workflow rather than adding subscriptions or agents.
 
-## Current live layer
-- Mission Control, Discover, Studio, Review, Calendar, Publishing Hub, Growth Intelligence, Library and Settings.
-- 16-agent orchestration model.
-- Zero-Cost Lock ON by default.
-- Universal AI Hub connector (separate service) plus optional Qwen, DeepSeek, Kimi, Gemini, Groq, OpenRouter and OpenAI slots.
-- Hybrid/free-first video plus optional Wan, Hunyuan, Kling, Hailuo, Pika, Runway and custom video slots.
-- Optional voice/storage slots.
-- PWA/offline shell and browser-local state.
+## What this version implements
 
-## Security boundary
-The public frontend never stores provider API secrets. Live AI calls, social OAuth/publishing, analytics sync and secret-bearing video calls must go through the secure backend layer (Cloudflare Worker recommended). Until that backend is connected, AUREXO uses explicit demo/manual-publish states rather than pretending an external action succeeded.
+- Manual ideas, source notes, editable content mode and age group.
+- Real Gemini/OpenAI text generation through a private backend, returning scripts, scenes, platform copy, thumbnail direction and review flags.
+- Owner sign-in, secure session cookies, origin checks, request size limits and login throttling.
+- Integration forms: save, test, encrypt, activate and disconnect. Failed tests never activate a key. Saved keys never return to the browser.
+- Local project persistence and explicit backups; optional server persistence and sign-in recovery.
+- Human content-plan approval with required review acknowledgements.
+- JSON briefs and original SVG text covers for manual production/publishing.
+- Automated backend and DOM tests plus GitHub Actions validation.
 
-Universal AI Hub is a separate project/service. AUREXO connects to it through the secure backend; Hub source is intentionally not embedded in this repository.
+## Run and verify
+
+Node.js 22 or later:
+
+```
+npm ci
+npm test
+npm run check
+npm run build
+npm start
+```
+
+The static preview is http://127.0.0.1:4173. Local manual ideas work without credentials. The authenticated backend is required for live AI.
+
+## Deploy
+
+See [Cloudflare setup](docs/CLOUDFLARE_SETUP.md). Serve frontend and API together from the Worker. The GitHub Pages frontend alone cannot store keys securely or perform live AI requests.
+
+## Production status
+
+This is a reviewed implementation increment, **not the complete autonomous production company**. See [remaining work and release gates](docs/PRODUCTION_STATUS.md). Do not represent a content plan as a rendered video, an AI assertion as fact verification, or a manual upload as a confirmed platform publication.
