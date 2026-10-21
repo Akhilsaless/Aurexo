@@ -30,11 +30,19 @@ const read = (key, fallback) => {
 let projects = read("aurexo_projects_v3", []),
   backend = read("aurexo_backend_v3", ""),
   authenticated = false,
+  role = null,
+  authStatus = {},
+  team = { requests: [], members: [] },
   providers = [],
   busy = false,
   message = "",
   notice = "",
   page = location.hash.slice(1) || "create";
+if (page === "access-pending") {
+  page = "integrations";
+  notice =
+    "Access requested. Ask the owner to approve you as Manager, then sign in with Google again.";
+}
 projects = Array.isArray(projects) ? projects.filter(validProject) : [];
 let serverRevision = read("aurexo_revision_v3", 0),
   afterRenderTask = null;
@@ -110,18 +118,21 @@ function publish() {
   const items = projects.filter((p) => p.state === "approved");
   return `<section class="intro"><h1>Prepare to publish</h1><p>Export approved scripts and platform copy for your production tools.</p></section><section class="panel callout"><b>Publish with your approval</b><p>Render or upload your video, approve its final media, then queue it for a connected account. Jobs show a confirmed upload only after the platform returns its video ID. You can also export files for manual upload.</p><div class="actions"><a class="button" href="https://studio.youtube.com" target="_blank" rel="noopener">YouTube Studio ↗</a><a class="button" href="https://business.facebook.com" target="_blank" rel="noopener">Meta Business Suite ↗</a></div></section>${items.length ? items.map((p) => card(p, selected === p.id) + publishControls(p)).join("") : '<section class="panel empty">Approved plans will appear here.</section>'}`;
 }
+function accessPanel() {
+  return `<section class="panel"><h3>Your account</h3>${authenticated ? `<p>Signed in as ${esc(role)}.</p><button data-action="logout">Sign out</button>` : `<button id="google-signin" ${authStatus.googleReady ? "" : "disabled"}>Sign in with Google</button><p class="hint">${authStatus.googleReady ? "New accounts request access. The owner must approve each manager." : "Owner setup required: add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to Cloudflare. Register /api/auth/google/callback on this app origin."}</p>${!authStatus.ownerPasswordReady ? `<p class="error">Owner password setup is invalid. Cloudflare needs a password of at least 16 characters.</p>` : ""}`}${authenticated && role === "owner" ? `<h4>Team access</h4><button id="team-refresh">Refresh access requests</button>${team.requests.map((m) => `<p>${esc(m.email)} <button data-team="approve" data-email="${esc(m.email)}">Approve as Manager</button><button data-team="revoke" data-email="${esc(m.email)}">Decline</button></p>`).join("")}${team.members.map((m) => `<p>${esc(m.email)} · Manager <button data-team="revoke" data-email="${esc(m.email)}">Revoke access</button></p>`).join("")}<p class="hint">Managers can work on projects, use connected AI, review media and publish. They cannot change keys, connections or team access. Revocation blocks their next request.</p>` : ""}</section>`;
+}
 function integrations() {
-  return `<section class="intro"><h1>Connect your tools</h1><p>Add your Gemini or OpenAI key when you are ready. A successful test activates that provider.</p></section><section class="panel"><h3>Secure backend</h3><form id="backend-form"><label>Backend URL<input name="url" type="url" required value="${esc(backend)}" placeholder="https://studio-api.example.com"></label><p class="hint">Use a backend on the same site as the app so secure sign-in cookies work.</p><button>Connect backend</button></form>${backend ? `<form id="login-form"><label>Owner password<input type="password" name="password" autocomplete="current-password" required minlength="16"></label><button ${authenticated ? "disabled" : ""}>${authenticated ? "Signed in" : "Sign in"}</button>${authenticated ? '<button type="button" data-action="logout">Sign out</button>' : ""}</form>` : ""}</section><div class="two">${[
+  return `<section class="intro"><h1>Connect your tools</h1><p>Add your Gemini or OpenAI key when you are ready. A successful test activates that provider.</p></section>${accessPanel()}<details class="panel"><summary>Advanced owner setup</summary><h3>Secure backend</h3><form id="backend-form"><label>Backend URL<input name="url" type="url" required value="${esc(backend)}" placeholder="https://studio-api.example.com"></label><p class="hint">Use a backend on the same site as the app so secure sign-in cookies work.</p><button>Connect backend</button></form>${backend ? `<form id="login-form"><label>Owner password<input type="password" name="password" autocomplete="current-password" required minlength="16"></label><button ${authenticated ? "disabled" : ""}>${authenticated ? "Signed in" : "Sign in"}</button>${authenticated ? '<button type="button" data-action="logout">Sign out</button>' : ""}</form>` : ""}</details><div class="two">${[
     "gemini",
     "openai",
   ]
     .map((id) => {
       const status = providers.find((p) => p.id === id);
-      return `<section class="panel"><div class="project-top"><h3>${id === "gemini" ? "Google Gemini" : "OpenAI"}</h3>${badge(status?.active ? "active" : "not connected")}</div><form class="provider-form" data-provider="${id}"><label>API key<input name="key" type="password" autocomplete="off" required placeholder="Enter key securely" minlength="10"></label><label>Model ID<input name="model" required maxlength="150" placeholder="Your provider’s model ID" value="${esc(status?.model || "")}"></label><label class="check"><input type="checkbox" name="usage" required>Allow a small API test using my provider quota</label><button class="primary" ${!authenticated || busy ? "disabled" : ""}>Save, test & activate</button>${status?.active ? `<button type="button" data-action="disconnect" data-provider="${id}">Disconnect</button>` : ""}</form><p class="hint">${status?.testedAt ? "Last tested " + esc(new Date(status.testedAt).toLocaleString()) : "Waiting for setup. No key is saved in this browser."}</p></section>`;
+      return `<section class="panel"><div class="project-top"><h3>${id === "gemini" ? "Google Gemini" : "OpenAI"}</h3>${badge(status?.active ? "active" : "not connected")}</div><form class="provider-form" data-provider="${id}"><label>API key<input name="key" type="password" autocomplete="off" required placeholder="Enter key securely" minlength="10"></label><label>Model ID<input name="model" required maxlength="150" placeholder="Your provider’s model ID" value="${esc(status?.model || "")}"></label><label class="check"><input type="checkbox" name="usage" required>Allow a small API test using my provider quota</label><button class="primary" ${!authenticated || role !== "owner" || busy ? "disabled" : ""}>Save, test & activate</button>${status?.active && role === "owner" ? `<button type="button" data-action="disconnect" data-provider="${id}">Disconnect</button>` : ""}</form><p class="hint">${status?.testedAt ? "Last tested " + esc(new Date(status.testedAt).toLocaleString()) : "Waiting for setup. No key is saved in this browser."}</p></section>`;
     })
     .join(
       "",
-    )}</div>${socialSettings()}${growthPanel()}<section class="panel"><h3>Production connections</h3><p>Text planning: ${providers.some((p) => p.active) ? "provider active" : "awaiting API key"}. Local video rendering and uploads are available in each project. Connect social apps for publishing and performance sync. AI narration uses an active OpenAI account.</p></section>`;
+    )}</div>${role === "owner" ? socialSettings() : '<p class="hint">The owner manages social connections. Managers can publish to the connected channels.</p>'}${growthPanel()}<section class="panel"><h3>Production connections</h3><p>Text planning: ${providers.some((p) => p.active) ? "provider active" : "awaiting API key"}. Local video rendering and uploads are available in each project. Connect social apps for publishing and performance sync. AI narration uses an active OpenAI account.</p></section>`;
 }
 function render() {
   root.innerHTML = `<div class="shell"><aside><a class="brand" href="#create"><i>A</i><div><b>AUREXO</b><small>CONTENT STUDIO</small></div></a><nav aria-label="Main navigation">${nav.map(([id, n]) => `<a href="#${id}" ${page === id ? 'aria-current="page"' : ""}>${n}${id === "review" && projects.some((p) => p.state === "review") ? ` <span>${projects.filter((p) => p.state === "review").length}</span>` : ""}</a>`).join("")}</nav><div class="foot">${authenticated ? "Backend signed in" : "Local drafts"}<small>${projects.length} projects</small></div></aside><main><header><span>Idea → Plan → Review → Produce</span><a href="#integrations">${providers.some((p) => p.active) ? "AI connected" : "Connect AI"}</a></header><div id="feedback" role="status" aria-live="polite">${message ? `<p class="error">${esc(message)}</p>` : ""}${notice ? `<p class="notice">${esc(notice)}</p>` : ""}</div>${({ create, projects: projectList, review, publish, integrations }[page] || create)()}<footer>Human approval stays in your hands.</footer></main></div>`;
@@ -190,6 +201,29 @@ function draft(form) {
   };
 }
 function bind() {
+  document.querySelector("#google-signin")?.addEventListener("click", () =>
+    action(async () => {
+      const result = await api("/api/auth/google/start", "POST", {});
+      location.assign(result.url);
+    }),
+  );
+  document.querySelector("#team-refresh")?.addEventListener("click", () =>
+    action(async () => {
+      team = await api("/api/team");
+    }),
+  );
+  document.querySelectorAll("[data-team]").forEach((button) =>
+    button.addEventListener("click", () =>
+      action(async () => {
+        await api("/api/team", "POST", {
+          email: button.dataset.email,
+          action: button.dataset.team,
+        });
+        team = await api("/api/team");
+        notice = "Access updated.";
+      }),
+    ),
+  );
   const createForm = document.querySelector("#create-form");
   if (createForm) {
     createForm.onsubmit = (e) => {
@@ -256,7 +290,8 @@ function bind() {
     e.preventDefault();
     const password = new FormData(e.target).get("password");
     action(async () => {
-      await api("/api/session", "POST", { password });
+      const loginResult = await api("/api/session", "POST", { password });
+      role = loginResult.role;
       authenticated = true;
       await syncProviders();
       const remote = await api("/api/projects");
@@ -463,6 +498,9 @@ async function initializeBackend() {
     api("/api/session")
       .then(async (s) => {
         authenticated = s.authenticated;
+        role = s.role;
+        authStatus = await api("/api/auth/status");
+        if (authenticated && role === "owner") team = await api("/api/team");
         if (authenticated) {
           await syncProviders();
           const snapshot = await api("/api/projects");
