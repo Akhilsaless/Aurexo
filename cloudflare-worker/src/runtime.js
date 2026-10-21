@@ -1,4 +1,5 @@
 import studio from "./studio.js";
+import { runAnimations } from "./animation.js";
 import { runDueJobs } from "./production.js";
 import { problem } from "./repository.js";
 export class StudioRuntime {
@@ -115,6 +116,7 @@ export class StudioRuntime {
     const env = this.bindings();
     try {
       await runDueJobs(env);
+      await runAnimations(env);
     } finally {
       const jobs = (await this.store.get("jobs", "json")) || [];
       const times = jobs
@@ -133,6 +135,9 @@ export class StudioRuntime {
             ? j.leaseUntil || Date.now() + 120000
             : j.nextRun || j.runAt,
         );
+      const animations = (await this.store.get("animations", "json")) || [];
+      if (animations.some((j) => j.state === "queued"))
+        times.push(Date.now() + 1000);
       if (times.length)
         await this.ctx.storage.setAlarm(
           Math.max(Date.now() + 1000, Math.min(...times)),

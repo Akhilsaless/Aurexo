@@ -1,4 +1,5 @@
 name = "aurexo-backend"
+preview_urls = false
 main = "src/runtime.js"
 compatibility_date = "2026-08-01"
 [assets]
@@ -16,3 +17,6 @@ binding = "MEDIA"
 bucket_name = "aurexo-media"
 [observability]
 enabled = true
+
+[vars]
+AUREXO_OWNER_EMAIL = "akhil.khali.111@gmail.com"

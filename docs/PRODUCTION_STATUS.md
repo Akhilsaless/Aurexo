@@ -27,7 +27,7 @@ The 16 logical roles share these capabilities and the same project state. They a
 
 ## Required activation and external verification
 
-Cloudflare CLI currently reports **not authenticated**. The backend has not been deployed to a real account. Hosting needs a Cloudflare sign-in, an R2 bucket, and server owner/encryption secrets. AI keys and social OAuth app credentials are intentionally deferred and can be entered through Integrations after deployment.
+The app and Durable Object backend are deployed at https://aurexo-backend.akhil-khali-111.workers.dev with a private R2 bucket. Runtime secrets exist; the earlier owner-password value was below the required length and cannot authenticate. Health now validates the actual password length and encryption-key format. Google login implementation requires GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in Cloudflare before use. AI keys and social OAuth app credentials remain intentionally deferred.
 
 Live provider requests, OAuth consent, media playback on target devices, social account eligibility/permissions, real upload/processing, real scheduled jobs and analytics must be exercised in staging with the actual accounts. Until that evidence exists, this is an implementation ready for activation and release verification, **not a claim that the whole service is already operational**.
 
@@ -42,3 +42,13 @@ Live provider requests, OAuth consent, media playback on target devices, social 
 - A platform can accept a request and lose the response. Ambiguous operations are held for inspection rather than retried blindly. No distributed system can promise exactly-once publication without platform support.
 - Media blobs are stored separately from JSON project backups. Download original media and export R2 objects when taking a complete backup.
 - The Lovable demo is a separate application. This repository is the selected implementation; it does not modify that demo automatically.
+
+## Owner and manager access
+
+Google OIDC verifies signature, issuer, audience, expiry, nonce, browser-bound one-time state and PKCE. The configured owner is akhil.khali.111@gmail.com. Other verified Google accounts request access; only the owner can approve Manager access. Revocation is checked on every request. Managers can create, review, use activated providers and publish; API keys, social connections and team changes remain owner-only.
+
+## AI animation
+
+Gemini Omni scene generation runs through Durable Object alarms and stores real returned MP4 bytes in private R2. Requests are deduplicated by scene and exact plan fingerprint. Default daily limit is three clips, up to ten seconds each. Ambiguous/interrupted requests need attention and are never blindly retried. Browser assembly retains clip audio in scene order. This integration and assembly require live provider and target-browser verification; mock contract tests are not evidence of provider access, character consistency or output quality.
+
+Current limitations: no phoneme/lip synchronization or guaranteed identical character/voice across generated clips; generated narration and captions need human inspection. Automatic captions are available for the local motion renderer; the animated-clip assembler retains original generated audio and does not create verified word-aligned captions. Longer videos require more clips and a deliberately raised owner request cap.

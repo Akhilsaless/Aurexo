@@ -1,3 +1,10 @@
+import {
+  authRoute,
+  googleSession,
+  revokeGoogleSession,
+  teamRoute,
+} from "./access.js";
+import { animationRoute } from "./animation.js";
 import { researchRoute } from "./research.js";
 // Single-owner API. Secrets are encrypted before persistence and never returned.
 import { productionRoute, oauthCallback, serveMedia } from "./production.js";
@@ -106,9 +113,11 @@ async function session(env, req) {
     .map((x) => x.trim())
     .find((x) => x.startsWith(cookieName + "="))
     ?.slice(cookieName.length + 1);
-  if (!token) return null;
+  if (!token) return googleSession(env, req);
   const s = await get(env, "session:" + (await digest(token)));
-  return s?.expires > Date.now() ? s : null;
+  return s?.expires > Date.now()
+    ? { ...s, role: "owner" }
+    : googleSession(env, req);
 }
 export async function credentials(env, id) {
   const p = PROVIDERS[id];
@@ -196,12 +205,24 @@ async function routes(env, req, reply) {
       service: "AUREXO Studio",
       version: "2.0.0",
       storage: Boolean(env.AUREXO_KV),
-      ownerConfigured: Boolean(env.AUREXO_OWNER_PASSWORD),
-      encryptionConfigured: Boolean(env.AUREXO_ENCRYPTION_KEY),
+      ownerConfigured:
+        typeof env.AUREXO_OWNER_PASSWORD === "string" &&
+        env.AUREXO_OWNER_PASSWORD.length >= 16,
+      encryptionConfigured: /^[a-f0-9]{64}$/i.test(
+        env.AUREXO_ENCRYPTION_KEY || "",
+      ),
     });
   if (!env.AUREXO_KV) throw fail(503, "Server storage is not configured");
-  if (path === "/api/session" && method === "GET")
-    return reply({ authenticated: Boolean(await session(env, req)) });
+  const authHandled = await authRoute(env, req, reply);
+  if (authHandled) return authHandled;
+  if (path === "/api/session" && method === "GET") {
+    const identity = await session(env, req);
+    return reply({
+      authenticated: Boolean(identity),
+      role: identity?.role || null,
+      email: identity?.email || null,
+    });
+  }
   if (path === "/api/session" && method === "POST") {
     if (!env.AUREXO_OWNER_PASSWORD || env.AUREXO_OWNER_PASSWORD.length < 16)
       throw fail(
@@ -236,14 +257,31 @@ async function routes(env, req, reply) {
       { expirationTtl: 28800 },
     );
     await env.AUREXO_KV.delete(rateKey);
-    return reply({ authenticated: true }, 200, {
+    return reply({ authenticated: true, role: "owner" }, 200, {
       "set-cookie": `${cookieName}=${token}; Secure; HttpOnly; SameSite=Strict; Path=/; Max-Age=28800`,
     });
   }
   if (/^\/api\/oauth\/(youtube|meta)\/callback$/.test(path) && method === "GET")
     return oauthCallback(env, req, reply);
-  if (!(await session(env, req)))
-    throw fail(401, "Sign in to your backend first");
+  const identity = await session(env, req);
+  if (!identity) throw fail(401, "Sign in to your backend first");
+  if (
+    identity.role !== "owner" &&
+    ((path === "/api/integrations" && method !== "GET") ||
+      [
+        "/api/social/config",
+        "/api/social/connect",
+        "/api/social/disconnect",
+      ].includes(path))
+  )
+    throw fail(
+      403,
+      "Only the owner can change integrations and connected accounts",
+    );
+  const team = await teamRoute(env, req, reply, identity, body);
+  if (team) return team;
+  const animated = await animationRoute(env, req, reply);
+  if (animated) return animated;
   if (path === "/api/session" && method === "DELETE") {
     const token = (req.headers.get("cookie") || "")
       .split(";")
@@ -251,9 +289,15 @@ async function routes(env, req, reply) {
       .find((x) => x.startsWith(cookieName + "="))
       ?.slice(cookieName.length + 1);
     if (token) await env.AUREXO_KV.delete("session:" + (await digest(token)));
-    return reply({ ok: true }, 200, {
+    await revokeGoogleSession(env, req);
+    const response = reply({ ok: true }, 200, {
       "set-cookie": `${cookieName}=; Secure; HttpOnly; SameSite=Strict; Path=/; Max-Age=0`,
     });
+    response.headers.append(
+      "set-cookie",
+      "__Host-aurexo-google=; Secure; HttpOnly; SameSite=Lax; Path=/; Max-Age=0",
+    );
+    return response;
   }
   const researched = await researchRoute(env, req, reply);
   if (researched) return researched;
@@ -450,7 +494,7 @@ export default {
       const response = new Response(asset.body, asset);
       response.headers.set(
         "Content-Security-Policy",
-        "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self' https:; img-src 'self' blob: data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'",
+        "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self' https:; img-src 'self' blob: data:; media-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'",
       );
       response.headers.set("X-Content-Type-Options", "nosniff");
       response.headers.set("Referrer-Policy", "no-referrer");
