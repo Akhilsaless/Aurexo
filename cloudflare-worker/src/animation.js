@@ -76,7 +76,16 @@ export async function animationRoute(env, req, reply) {
       0,
       Math.min(50, Number(env.AUREXO_DAILY_VIDEO_LIMIT ?? 3)),
     );
-    if (list.filter((j) => j.createdAt.startsWith(today)).length >= limit)
+    if (
+      list.filter(
+        (j) =>
+          j.createdAt.startsWith(today) &&
+          !(
+            j.providerRejected ||
+            /^Google video request failed \(429\)/.test(j.message || "")
+          ),
+      ).length >= limit
+    )
       throw problem(
         429,
         "Daily animated-scene limit reached. The owner controls AUREXO_DAILY_VIDEO_LIMIT.",
@@ -147,11 +156,17 @@ export async function runAnimations(env) {
         }),
       },
     );
-    if (!r.ok)
-      throw problem(
-        502,
-        `Google video request failed (${r.status}). Check model access and quota. No automatic retry.`,
-      );
+    if (!r.ok) {
+      await save({
+        state: "needs_attention",
+        providerRejected: r.status >= 400 && r.status < 500 && r.status !== 408,
+        message:
+          r.status === 429
+            ? "Google rejected video generation: quota unavailable (429). Check Gemini video access, rate limits and paid billing in Google AI Studio. No automatic retry."
+            : `Google video request failed (${r.status}). Check model access and quota. No automatic retry.`,
+      });
+      return;
+    }
     const reader = r.body.getReader();
     let total = 0;
     const chunks = [];
