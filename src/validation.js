@@ -4,6 +4,7 @@ export function validProject(p) {
     typeof p !== "object" ||
     typeof p.id !== "string" ||
     p.id.length > 100 ||
+    !/^[a-zA-Z0-9_-]+$/.test(p.id) ||
     typeof p.title !== "string" ||
     p.title.length > 300 ||
     !["draft", "review", "approved"].includes(p.state) ||

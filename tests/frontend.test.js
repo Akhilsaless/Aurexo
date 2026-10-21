@@ -1,13 +1,23 @@
+import { migrateLegacy } from "../src/migration.js";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import vm from "node:vm";
 import { JSDOM } from "jsdom";
 import { AGENTS } from "../src/domain.js";
+import {
+  researchPanel,
+  editor,
+  mediaPanel,
+  publishControls,
+  socialSettings,
+  growthPanel,
+  discoveryPanel,
+} from "../src/production-ui.js";
 import { validProject } from "../src/validation.js";
 const source = (
   await readFile(new URL("../src/app.js", import.meta.url), "utf8")
-).replace(/^import .*;\r?\n/gm, "");
+).replace(/^import [\s\S]*?from ["'][^"']+["'];\r?\n/gm, "");
 const tick = () => new Promise((r) => setTimeout(r, 20));
 function app(data = {}) {
   const dom = new JSDOM('<div id="app"></div>', { url: "https://studio.test" });
@@ -27,6 +37,15 @@ function app(data = {}) {
     setTimeout,
     clearTimeout,
     AGENTS,
+    migrateLegacy,
+    researchPanel,
+    editor,
+    mediaPanel,
+    publishControls,
+    socialSettings,
+    growthPanel,
+    discoveryPanel,
+    bindProduction: () => {},
     validProject,
     confirm: () => true,
     fetch: async () => {

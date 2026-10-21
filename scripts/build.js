@@ -12,6 +12,10 @@ for (const file of [
   "src/domain.js",
   "src/integration-registry.js",
   "src/validation.js",
+  "src/quality.js",
+  "src/migration.js",
+  "src/media.js",
+  "src/production-ui.js",
 ])
   await copyFile(file, resolve(dist, file));
 console.log("Static production assets built in dist/");

@@ -1,36 +1,23 @@
 # AUREXO Studio
 
-A simpler, single-owner content planning workspace built from the existing AUREXO repository. The five screens are Create, Projects, Review, Publish and Integrations. Kids Content Mode configures the existing 16-role workflow rather than adding subscriptions or agents.
+A five-screen content workspace: **Create → Projects → Review → Publish → Integrations**. The 16 logical production roles share one orchestrated project workflow. Kids Content Mode configures the same team for an age group and learning goal.
 
-## What this version implements
+## Workflows
 
-- Manual ideas, source notes, editable content mode and age group.
-- Real Gemini/OpenAI text generation through a private backend, returning scripts, scenes, platform copy, thumbnail direction and review flags.
-- Owner sign-in, secure session cookies, origin checks, request size limits and login throttling.
-- Integration forms: save, test, encrypt, activate and disconnect. Failed tests never activate a key. Saved keys never return to the browser.
-- Local project persistence and explicit backups; optional server persistence and sign-in recovery.
-- Human content-plan approval with required review acknowledgements.
-- JSON briefs and original SVG text covers for manual production/publishing.
-- Automated backend and DOM tests plus GitHub Actions validation.
+Discover headlines, retrieve educational source text, generate a Gemini/OpenAI plan, edit scripts/scenes/platform copy, run critical source review, approve the plan, create voice/illustrations or upload original assets, render a playable Nova motion video, review its final media and queue a connected social account. YouTube resumable uploads and Durable Object scheduling preserve job state. Performance sync feeds evidence-based suggestions.
 
-## Run and verify
+Without credentials, manual writing, local media rendering, PNG/SRT/JSON export, backups and legacy-draft import remain available. Add Gemini/OpenAI credentials later through encrypted Integrations forms. The original Lovable demo is separate from this repository.
 
-Node.js 22 or later:
+## Development
 
 ```
 npm ci
-npm test
 npm run check
+npm test
 npm run build
 npm start
 ```
 
-The static preview is http://127.0.0.1:4173. Local manual ideas work without credentials. The authenticated backend is required for live AI.
+Local preview: http://127.0.0.1:4173 . `npm run verify:runtime` exercises the real Cloudflare runtime locally; workerd must be permitted by your OS. CI runs tests, native PNG rendering, runtime verification and a deployment bundle dry-run on Linux.
 
-## Deploy
-
-See [Cloudflare setup](docs/CLOUDFLARE_SETUP.md). Serve frontend and API together from the Worker. The GitHub Pages frontend alone cannot store keys securely or perform live AI requests.
-
-## Production status
-
-This is a reviewed implementation increment, **not the complete autonomous production company**. See [remaining work and release gates](docs/PRODUCTION_STATUS.md). Do not represent a content plan as a rendered video, an AI assertion as fact verification, or a manual upload as a confirmed platform publication.
+See [deployment](docs/CLOUDFLARE_SETUP.md) and [release status and limits](docs/PRODUCTION_STATUS.md). A merged frontend is not proof of a deployed backend or successfully connected provider accounts.

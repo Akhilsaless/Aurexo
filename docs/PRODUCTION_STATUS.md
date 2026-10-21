@@ -1,26 +1,44 @@
-# Release gates and remaining implementation
+# AUREXO Studio — release status
 
-## Implemented in this branch
+## Implemented
 
-Simplified five-screen UI; Kids Content Mode; manual ideas; text-plan generation with Gemini/OpenAI; secure owner sessions; encrypted integration forms with real connection testing; schema validation; local/server persistence; backup/restore; human plan approvals; JSON brief and SVG cover export; automated tests and CI.
+| Workflow                                 | Implementation                                                                                                                                                                                                    |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Discovery and scoring                    | Current headline feed; transparent freshness/fit/effort heuristic, not a prediction of views                                                                                                                      |
+| Research and fact review                 | Restricted educational-source retrieval, source notes and separate AI reviewer with exact-quote checks; human verification remains required                                                                       |
+| Strategy, writing and creative direction | Gemini/OpenAI content plans, script and scene revision, brand direction and platform metadata                                                                                                                     |
+| Nova, direction and editing              | Original animated Nova mascot, local 720×1280 video recording, optional uploaded or OpenAI narration, original/uploaded/AI illustration and caption/SRT export                                                    |
+| Thumbnail                                | Original PNG/SVG cover export plus optional OpenAI illustration                                                                                                                                                   |
+| Platform adaptation                      | Editable YouTube/Instagram/Facebook titles and captions; vertical media export. Instagram/Facebook uploads require MP4                                                                                            |
+| Quality and approval                     | Separate plan and final-media review; reviewed media and plan snapshots enforced on the server; edits invalidate approval                                                                                         |
+| Publishing                               | Encrypted YouTube/Meta OAuth configuration and tokens, YouTube refresh and resumable upload, Instagram container processing/publish and Facebook upload processing                                                |
+| Scheduling                               | Transactionally queued Durable Object alarms, duplicate job protection, interrupted-job handling, cancel and safe YouTube session resume                                                                          |
+| Growth and optimization                  | YouTube API reports, Meta metric adapters with explicit unsupported/error states, evidence-based suggestions; no fabricated metrics                                                                               |
+| Persistence and security                 | Single-owner sessions, encrypted provider/social credentials, transactional revisions, request/login limits, body limits, private R2 media, short-lived signed fetch URLs, backup/restore and legacy-draft import |
 
-## Not yet production complete
+The 16 logical roles share these capabilities and the same project state. They are not 16 subscriptions. Source review is not a guarantee of truth or legal compliance.
 
-- Real provider credentials and deployment have not been supplied. No live AI request or Cloudflare deployment was verified.
-- Browser visual QA was attempted but the in-app browser could not reach the Windows local preview. DOM tests are not a replacement for device/browser accessibility and visual checks.
-- News/trend retrieval, source fetching and independent claim verification. Current AI planning uses owner-supplied source notes; it does not browse.
-- Voice/avatar generation, actual media assets, editing, captions/audio mixing and playable video render/export.
-- Real final-media review, copyright/provenance evidence, children's-content policy checks and platform-specific configuration. Kids mode is a prompt constraint plus adult review, not a compliance guarantee.
-- Platform OAuth, token refresh, resumable upload, idempotent publication, durable schedules and external upload confirmation. Current Publish screen explicitly supports manual production/export only.
-- Analytics ingestion, retention analysis and measured learning/optimization. No sample performance data is presented as real.
-- Atomic/conflict-aware server persistence, durable jobs, budget accounting, monitoring, rollback and restore drills, edge rate limiting and security review.
-- Revision editing within an existing project; presently a requested revision returns the plan to drafts for export/recreation.
-- Migration from the old local state, which remains untouched under its previous storage key.
+## Validation evidence
 
-## Required before claiming end-to-end production readiness
+- Backend, DOM, editorial, media timing/storage, source restrictions and publish recovery tests run locally.
+- Cloudflare deployment bundle dry-run succeeds.
+- Native Canvas and the Cloudflare workerd executable are blocked by Windows application control on this machine; the corresponding real PNG and Durable Object runtime checks run in Linux GitHub CI. Check the latest CI result before release.
+- The merged five-screen frontend was opened successfully at https://akhilsaless.github.io/Aurexo/ . Browser testing of the new production controls is recorded after merge.
 
-Deploy a staging environment, configure owner security, test real provider accounts, complete media/publishing integrations above, and prove one complete topic-to-video-to-approved-upload-to-analytics cycle. Test unauthorized access, failed provider calls, expired social tokens, duplicate upload prevention, scheduling time zones, interrupted jobs, backup recovery and accessibility on mobile and desktop. Record the actual evidence here.
+## Required activation and external verification
 
-## Relationship to Lovable
+Cloudflare CLI currently reports **not authenticated**. The backend has not been deployed to a real account. Hosting needs a Cloudflare sign-in, an R2 bucket, and server owner/encryption secrets. AI keys and social OAuth app credentials are intentionally deferred and can be entered through Integrations after deployment.
 
-This repository is a different implementation from the earlier Lovable React demo. This branch does not automatically replace or update the Lovable project. Choose and verify the deployment source before release.
+Live provider requests, OAuth consent, media playback on target devices, social account eligibility/permissions, real upload/processing, real scheduled jobs and analytics must be exercised in staging with the actual accounts. Until that evidence exists, this is an implementation ready for activation and release verification, **not a claim that the whole service is already operational**.
+
+## Product limits
+
+- Single-owner workspace, not a multi-user SaaS.
+- Native graphics/motion-video renderer, not a photorealistic avatar or generative-video model. External edited MP4s can be uploaded.
+- Captions use estimated word timing; final playback review is required.
+- Keep the rendering tab visible. Browser encoding format/support varies; use uploaded MP4s when a target platform requires MP4.
+- Cloudflare upload limit in this app: 40 MB/video. Narration/image files are capped separately.
+- API/account restrictions can keep uploads private or deny metrics even with valid credentials. Such states require owner attention and are not reported as successful publication.
+- A platform can accept a request and lose the response. Ambiguous operations are held for inspection rather than retried blindly. No distributed system can promise exactly-once publication without platform support.
+- Media blobs are stored separately from JSON project backups. Download original media and export R2 objects when taking a complete backup.
+- The Lovable demo is a separate application. This repository is the selected implementation; it does not modify that demo automatically.

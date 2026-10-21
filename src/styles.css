@@ -425,3 +425,30 @@ summary:focus-visible {
     font-size: 10px;
   }
 }
+
+progress {
+  width: 100%;
+  accent-color: var(--green);
+}
+.video-preview video {
+  border-radius: 12px;
+  background: #10241b;
+  margin: 18px 0;
+}
+.edit-project,
+.final-review,
+.social-config {
+  margin-top: 22px;
+}
+.render-status {
+  margin: 16px 0;
+}
+.details > .panel {
+  padding: 20px;
+}
+.details > .panel summary {
+  font-size: 14px;
+}
+.details p {
+  overflow-wrap: anywhere;
+}
