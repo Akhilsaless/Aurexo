@@ -1,3 +1,4 @@
+import { runAutopilot } from "./autopilot.js";
 import studio from "./studio.js";
 import { runAnimations } from "./animation.js";
 import { runDueJobs } from "./production.js";
@@ -116,6 +117,7 @@ export class StudioRuntime {
     const env = this.bindings();
     try {
       await runDueJobs(env);
+      await runAutopilot(env);
       await runAnimations(env);
     } finally {
       const jobs = (await this.store.get("jobs", "json")) || [];
@@ -138,6 +140,13 @@ export class StudioRuntime {
       const animations = (await this.store.get("animations", "json")) || [];
       if (animations.some((j) => j.state === "queued"))
         times.push(Date.now() + 1000);
+      const automatic = (await this.store.get("autopilot", "json")) || [];
+      if (
+        automatic.some((r) =>
+          ["queued", "planning", "generating", "publishing"].includes(r.state),
+        )
+      )
+        times.push(Date.now() + 5000);
       if (times.length)
         await this.ctx.storage.setAlarm(
           Math.max(Date.now() + 1000, Math.min(...times)),
